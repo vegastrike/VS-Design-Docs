@@ -1,0 +1,57 @@
+#!/bin/sh
+# $Id: latex-auto,v 1.1 2008/03/22 21:40:18 jbrown Exp $
+# JAB
+
+prog=`basename "$0"`
+pdir=`dirname "$0"`
+
+latex_make="$pdir/latex-make"
+
+usage () {
+  cat <<END
+usage: $prog [-n]
+
+This is a wrapper for latex-make, which just uses wildcard matching in
+the current directory to guess at filenames.
+
+-n: just show resulting latex-make command
+
+END
+  exit 1
+}
+bad_usage() { echo "$prog: bad usage, see '-h' for info" 2>&1 ; exit 1 ; }
+
+die () { echo "$prog: die: $@" 1>&2 ; exit 1 ; }
+
+dry=''
+
+while getopts "hn" opt ; do
+  case $opt in
+  h) usage ;;
+  n) dry="echo" ;;
+  *) bad_usage ;;
+  esac
+done
+shift $(($OPTIND - 1))
+[ "$#" -eq 0 ] || bad_usage
+
+master_tex=""
+for guess in paper.tex thesis.tex main.tex ; do
+  if [ -e "$guess" ] ; then
+    master_tex="$guess"
+    break
+  fi
+done
+
+[ -n "$master_tex" ] || die "couldn't guess top-level tex filename"
+
+all_texdep=`ls | egrep -i '\.(tex|sty|eps)$' | tr '\n' ','`
+all_bibtex=`ls | egrep -i '\.(bib|bst)$' | tr '\n' ','`
+# remove trailing commas
+all_texdep="${all_texdep%,}"
+all_bibtex="${all_bibtex%,}"
+
+dash_b=""
+[ -n "$all_bibtex" ] && dash_b="-b"
+
+$dry "$latex_make" -d , -t "$all_texdep" $dash_b "$all_bibtex" "$master_tex"

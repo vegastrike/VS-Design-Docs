@@ -1,0 +1,118 @@
+\input{texheader}
+\begin{document}
+\title{Vega Strike Universe \\ 
+Development Document}
+
+\author{Text: JS, et al\\
+Art: Oblivion, et al}
+
+\renewcommand{\thepage}{\roman{page}}
+\maketitle
+\renewcommand{\thepage}{\arabic{page}}
+\thispagestyle{empty}
+\centerline{\bf {\Huge Notice:}}
+{\it
+\input{splashnotice}
+}
+
+\setcounter{tocdepth}{2}
+\clearpage
+%\phantomsection
+\addcontentsline{toc}{chapter}{Table of Contents}
+\tableofcontents
+\listoftables
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoffigures
+\addcontentsline{toc}{chapter}{List of Figures}
+
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+\input{preface}
+
+\chapter{Overview}
+\input{overview}
+
+\chapter{Timeline (Omniscient Viewpoint)}
+\input{timeline}
+
+\chapter{UTCS: Player Character Plotting}
+\input{PCplots}
+
+\chapter{Portfolios}
+\input{profiles}
+
+\chapter{Uncategorized Items}
+\input{random}
+
+%DUMMY INDEX ENTRIES
+%\index{cheese}
+%\index{cheese!gouda}
+%\index{cheese!gouda!goat gouda}
+%\index{cheese!stilton!blue stilton}
+%\index{cheese!stilton!white stilton}
+%\index{cheese|see{crackers}} 
+%\index{crackers}
+%\index{Fakecheese@\textit{Fakecheese}}
+%\index{cheese@(cheese)!Blue Cheese} % makes (cheese)appear as if spelled ``cheese''
+
+\chapter*{APPENDICES}
+\addtocounter{chapter}{1}
+\setcounter{section}{0}
+\addcontentsline{toc}{chapter}{APPENDICES}
+\setcounter{section}{0}
+\renewcommand{\thesection}{A.\arabic{section}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{A-\arabic{figure}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{A-\arabic{table}}
+
+\section*{Appendix A: Species information}
+\addcontentsline{toc}{chapter}{Appendix A: Species information (In-game Viewpoint circa 3276 CE)}
+\input{appendixA}
+\addtocounter{chapter}{1}
+
+\section*{Appendix B: Faction information}
+\addcontentsline{toc}{chapter}{Appendix B: Faction information (In-game Viewpoint circa 3276 CE)}
+\setcounter{section}{0}
+\renewcommand{\thesection}{B.\arabic{section}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{B-\arabic{figure}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{B-\arabic{table}}
+\input{appendixB}
+\addtocounter{chapter}{1}
+
+\section*{Appendix C: Vega Strike Trailer Script}
+\addcontentsline{toc}{chapter}{Appendix C: Vega Strike Trailer Script}
+\setcounter{section}{0}
+\renewcommand{\thesection}{C.\arabic{section}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{C-\arabic{figure}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{C-\arabic{table}}
+\input{appendixC}
+
+{
+\small
+\bibliographystyle{abbrv}
+\small
+\cleardoublepage
+\renewcommand\bibname{References}
+\bibliography{biblio}
+}
+\addcontentsline{toc}{chapter}{References}
+
+\nomenclature{FTL}{Faster Than Light}
+
+\clearpage
+\printglossary
+\addcontentsline{toc}{chapter}{Glossary}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{Index}
+\printindex
+
+
+\end{document}
+

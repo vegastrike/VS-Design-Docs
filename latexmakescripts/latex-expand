@@ -1,0 +1,133 @@
+#!/usr/bin/env perl
+#
+# Preprocessing tool that tries to "flatten" multi-file tex documents into
+# one big tex file.
+#
+# Copyright 2008 Jeff Brown.  This software is distributed under the terms of
+# the GNU General Public License.
+#
+# JAB
+# $Id: latex-expand,v 1.6 2008/06/27 17:33:35 jbrown Exp $
+
+use strict;
+use warnings;
+use Getopt::Std;
+use IO::File;
+use File::Basename;
+
+use FindBin; use lib "$FindBin::RealBin";
+use jSet;
+
+my $Prog = basename($0);
+
+
+sub usage() {
+  print STDOUT <<EOF;
+usage:
+  $Prog [-b] <master.tex>
+
+This reads through a latex file, expanding \\input directives in-line, to
+produce a single big blob of tex, writing to stdout. This is ad-hoc,
+fragile, clashes with your new shoes, etc.
+
+This does not support \\includeonly, and directives are only matched
+when alone on thier own line.
+
+-b: inline generated \\bibliography{...}, too
+
+EOF
+  exit 1;
+}
+sub bad_usage() {
+  print STDERR "$Prog: bad usage; see '-h' for help\n";
+  exit 1;
+}
+
+
+# Command-line parsing
+my $ExpandBiblio = 0;
+{
+  my %opts;
+  if (!getopts('bh', \%opts)) { bad_usage; }
+  if (defined($opts{h})) { usage; }
+  if (defined($opts{b})) { $ExpandBiblio = 1; }
+}
+if (@ARGV != 1) { bad_usage; }
+my $MasterTex = shift @ARGV;
+my $MasterBib = undef;
+my $FilesSeen = new jSet;
+
+sub expand_tex($$);
+
+{
+  my $out_fh = *STDOUT;
+  if ($ExpandBiblio) {
+    my ($base, $path, $ext) = fileparse($MasterTex, qr{\.tex});
+    $MasterBib = $path . $base . ".bbl";
+  }
+  expand_tex($out_fh, $MasterTex);
+  exit 0;
+}
+
+
+sub count_bibitems($) {
+  my ($bbl_name) = @_;
+  my $in_fh = new IO::File($bbl_name, "r") or
+    die "couldn't open bbl file \"$bbl_name\": $!";
+  my $item_count = 0;
+  while (defined(my $line = $in_fh->getline())) {
+    if ($line =~ /^\s*\\bibitem\{/) {
+      $item_count++;
+    }
+  }
+  $in_fh->close();
+  return $item_count;
+}
+
+
+sub expand_tex($$) {
+  my ($out_fh, $in_fname) = @_;
+  if ($FilesSeen->test($in_fname)) {
+    die "expanded input file \"$in_fname\" more than once; looping";
+  }
+  $FilesSeen->insert($in_fname);
+
+  my $in_fh = new IO::File($in_fname, "r") or
+    die "couldn't open \"$in_fname\": $!";
+  my $lnum = 0;
+  while (defined(my $line = $in_fh->getline())) {
+    $lnum++;
+    chomp $line;
+    if ($line =~ /^\s*\\(input|include|includeonly)\{([^}]+)\}\s*$/) {
+      my ($op, $sub_file) = ($1, $2);
+      if (!(basename($sub_file) =~ /\./)) {
+	$sub_file .= ".tex";
+      }
+      if ($op eq "includeonly") {
+	die "includeonly not supported, \"$in_fname\" line $lnum";
+      } elsif ($op eq "include") {
+	# per http://www.tac.dk/cgi-bin/info2www?(latex)\include
+	$out_fh->print("\\clearpage ");
+	expand_tex($out_fh, $sub_file);
+	$out_fh->print(" \\clearpage\n");
+      } elsif ($op eq "input") {
+	expand_tex($out_fh, $sub_file);
+      } else {
+	die "unmatched: \"$op\"";
+      }
+    } elsif ($ExpandBiblio &&
+	     ($line =~ /^\s*\\bibliography\{([^}]+)\}\s*$/)) {
+      my $bib_src = $1;
+      #my $widest_label = count_bibitems($MasterBib);
+      #$out_fh->print("\\begin{thebibliography}{$widest_label}\n");
+      expand_tex($out_fh, $MasterBib);
+      #print "\\end{thebibliography}{}\n";
+    } else {
+      print $line . "\n";
+    }
+  }
+  if ($in_fh->error()) {
+    die "error reading from \"$in_fname\": $!";
+  }
+  $in_fh->close();
+}

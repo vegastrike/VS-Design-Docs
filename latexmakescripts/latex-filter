@@ -1,0 +1,84 @@
+#!/usr/bin/env perl
+#
+# Test program to run latex log parser code directly on log text.
+#
+# Copyright 2008 Jeff Brown.  This software is distributed under the terms of
+# the GNU General Public License.
+#
+# JAB
+# $Id: latex-filter,v 1.8 2008/06/28 01:48:56 jbrown Exp $
+
+use strict;
+use warnings;
+use Getopt::Std;
+use IO::File;
+use File::Basename;
+
+use FindBin; use lib "$FindBin::RealBin";
+use jTexTools;
+
+my $Prog = basename($0);
+
+
+sub usage() {
+  print STDOUT <<EOF;
+usage:
+  $Prog [-b] [-i] [-D]
+
+This reads log output from "latex" and outputs a summarized version.
+
+-b: process bibtex instead of latex
+-i: process makeindex instead of latex
+-D: debug mode: dump parsed output
+EOF
+  exit 1;
+}
+sub bad_usage() {
+  print STDERR "$Prog: bad usage; see '-h' for help\n";
+  exit 1;
+}
+
+
+# Command-line parsing
+my $Debug;
+my $Mode = "l";         # which parser to use: "l"atex, "b"ibtex, ...
+{
+  my %opts;
+  if (!getopts('bhiD', \%opts)) { bad_usage; }
+  if (defined($opts{h})) { usage; }
+  if (defined($opts{b})) { $Mode = "b"; }
+  if (defined($opts{i})) { $Mode = "i"; }
+  if (defined($opts{D})) { $Debug = 1; }
+}
+if (@ARGV != 0) { bad_usage; }
+
+{
+  my ($stat, $cmd_out);
+
+  # filter stdin
+  my @tmp = <STDIN>;
+  $stat = 0;
+  $cmd_out = \@tmp;
+
+  my $filt;     # filtered output
+
+  foreach my $l (@$cmd_out) { chomp $l; }       # edit in-place
+  if ($Mode eq "l") {
+    my $filt_opts = { dump_parsed => $Debug };
+    $filt = jTexTools::filter_latex_out($cmd_out, $filt_opts);
+  } elsif ($Mode eq "b") {
+    my $filt_opts = { dump_parsed => $Debug };
+    $filt = jTexTools::filter_bibtex_out($cmd_out, $filt_opts);
+  } elsif ($Mode eq "i") {
+    my $filt_opts = { dump_parsed => $Debug };
+    $filt = jTexTools::filter_makeindex_out($cmd_out, $filt_opts);
+  } else {
+    die "unrecognized mode: '$Mode'";
+  }
+
+  if (@$filt) {
+    print join("\n", @$filt) . "\n";
+  }
+
+  exit $stat;
+}

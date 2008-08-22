@@ -1,0 +1,1071 @@
+#!/usr/bin/env perl
+#
+# latex-make: script to perform "make"-like execution of latex, bibtex, and
+# friends in order to build a tex document from source.  This isn't concerned
+# with the entire build process, just the parts for which typical Makefile
+# semantics break down due to circular dependences.
+#
+# This is largely ad-hoc, with things expressed long-hand programmatically
+# instead of in nice compact structures like dependence graphs.  This is done
+# for flexibility; this "spaghetti code on top of generic data structures"
+# approach has been readily adaptable to the various odd behavior exhibited
+# by screwball latex tools.
+#
+# Copyright 2008 Jeff Brown.  This software is distributed under the terms of
+# the GNU General Public License.
+#
+# JAB
+# $Id: latex-make,v 1.20 2008/07/06 18:55:07 jbrown Exp $
+
+use strict;
+use warnings;
+use Getopt::Std;
+use IO::File;
+use File::Basename;
+use Data::Dumper;
+use Digest::MD5;
+
+use FindBin; use lib "$FindBin::RealBin";
+use jExecTools;
+use jTexTools qw(REPORT_INFO REPORT_WARN REPORT_ERR);
+use jSet;
+
+my $Prog = basename($0);
+
+my $Latex = "latex";
+my $Pdflatex = "pdflatex";
+my $Bibtex = "bibtex";
+my $Makeindex = "makeindex";
+my $IgnoreDepRE = qr{^(?:/usr/share/.*)$}x;
+
+sub usage() {
+  print STDOUT <<EOF;
+usage:
+  $Prog [-p] [-s] [-D] [-d delim] [-b bibdep,] [-t texdep,] <master.tex>
+
+master.tex -> master.dvi (or master.pdf, with -p)
+
+-b n: enable bibtex, with the given input files declared as dependences
+-d n: set the filename delimiter used in the dependence lists (default: comma)
+-D: debug mode
+-p: run pdflatex instead of latex
+-s: silent, don\'t show commands (MAKEFLAGS is also tested for this)
+-t n: declare additional dependences for the tex document
+
+EOF
+  exit 1;
+}
+sub bad_usage() {
+  print STDERR "$Prog: bad usage; see '-h' for help\n";
+  exit 1;
+}
+
+
+# Command-line parsing
+
+my $Silent = 0;
+my $Debug = 0;
+my $TexDeps = "";
+my $BibtexDeps = "";
+my $DepDelim = ",";
+my $UsePdflatex = 0;
+{
+  my %opts;
+  if (!getopts('hsd:b:pt:D', \%opts)) { bad_usage; }
+  if (defined($opts{h})) { usage; }
+  if (defined($opts{'s'})) { $Silent = 1; }
+  if (defined($opts{d})) { $DepDelim = $opts{d}; }
+  if (defined($opts{b})) { $BibtexDeps = $opts{b}; }
+  if (defined($opts{p})) { $UsePdflatex = 1; }
+  if (defined($opts{t})) { $TexDeps = $opts{t}; }
+  if (defined($opts{D})) { $Debug = 1; }
+}
+if (@ARGV != 1) { bad_usage; }
+my $MasterTex = shift @ARGV;
+if (defined(my $makeflags = $ENV{MAKEFLAGS})) {
+  if ($makeflags =~ /^\S*s/) { $Silent = 1; }
+}
+
+
+use constant {
+  SHOULD_NO => 0,       # no run needed
+  SHOULD_DEFER => 1,    # run needed, but inputs not ready yet
+  SHOULD_YES => 2       # yes, run it
+};
+my @ShouldRunNames = qw{SHOULD_NO SHOULD_DEFER SHOULD_YES};
+use constant {
+  RUN_FINAL => 0,       # run OK, final output ready
+  RUN_NEEDMORE => 1,    # another run needed
+  RUN_ERROR => 2        # error seen
+};
+my @RunOutcomeNames = qw{RUN_FINAL RUN_NEEDMORE RUN_ERROR};
+
+
+use constant {
+  LATEX_USE_STDOUT => 0,
+  BIBTEX_USE_STDOUT => 0,
+};
+
+sub toplev();
+exit toplev();
+
+
+sub dprint($) {
+  my ($str) = @_;
+  if ($Debug) { print "# " . $str . "\n"; }
+}
+
+
+sub min {
+  my $result;
+  foreach my $val (@_) {
+    if (!defined($val)) { next; }
+    if (!defined($result) || ($val < $result)) { $result = $val; }
+  }
+  return $result;
+}
+
+
+sub max {
+  my $result;
+  foreach my $val (@_) {
+    if (!defined($val)) { next; }
+    if (!defined($result) || ($val > $result)) { $result = $val; }
+  }
+  return $result;
+}
+
+
+sub get_mtime($) {
+  my ($name) = @_;
+  my @fields = stat $name;
+  if (@fields > 0) {
+    return $fields[9];
+  }
+  die "stat($name) failed: $!";
+}
+
+
+sub set_mtime($$) {
+  my ($name, $time) = @_;
+  utime $time, $time, $name or
+    die "utime($name) failed: $!";
+}
+
+
+sub md5_hex_file($) {
+  my ($fname) = @_;
+  my $fh = new IO::File("$fname", "r") or die "couldn't open \"$fname\": $!";
+  my $md5 = new Digest::MD5 or die "couldn't create digest";
+  $md5->addfile($fh) or die "error adding \"$fname\" to digest";
+  return $md5->hexdigest();
+}
+
+
+sub str_undef($) {
+  my ($str) = @_;
+  return (defined($str)) ? $str : "(undef)";
+}
+
+
+# returns a listref of chomped lines; dies on error
+sub load_textfile($) {
+  my ($fname) = @_;
+  my $fh = new IO::File($fname, "r") or
+    die "couldn't open \"$fname\": $!";
+  my @lines;
+  while (defined(my $line = $fh->getline())) {
+    chomp $line;
+    push @lines, $line;
+  }
+  if ($fh->error() || !$fh->close()) {
+    die "error reading from \"$fname\"";
+  }
+  return \@lines;
+}
+
+
+# Generate a function which will restore the mtime of a file, if its
+# contents appear unchanged since it was created.
+#
+# CAUTION: be careful using this anywhere outside of e.g. run_latex(), since
+# resetting an output mtime to before that of an input mtime can otherwise
+# lead to infinite repetition.  (run_latex() takes extra steps with the
+# "ignore_targ_mtime" parameter to should_run_common() to account for this.)
+#
+# fname: filename in question.  Must exist.
+# returns a coderef.
+#
+# When &$retval() is called if the file contents appear modified, 0 is
+# returned.  If the contents appear unmodified, the old mtime is restored,
+# and 1 is returned.  Dies on any error.  Susceptible to races.  Should
+# be called at most once.
+sub gen_mtime_undoer($) {
+  my ($fname) = @_;
+  my $old_mtime = get_mtime($fname);
+  my $old_md5 = md5_hex_file($fname);
+  my $called = 0;
+  my $tag = "mtime_undo";
+  dprint "$tag: \"$fname\" old_md5 $old_md5 old_mtime $old_mtime";
+
+  my $result_func = sub {
+    if ($called) { die "$tag: undoer for \"$fname\" called more than once"; }
+    $called = 1;
+    my $new_md5 = md5_hex_file($fname);
+    my $contents_match = ($new_md5 eq $old_md5);
+    dprint "$tag: \"$fname\" new_md5 $new_md5 ; " .
+      (($contents_match) ? "restoring $old_mtime" : "modified");
+    if ($contents_match) {
+      set_mtime($fname, $old_mtime);
+    }
+    return ($contents_match) ? 1 : 0;
+  };
+  return $result_func;
+}
+
+
+# returns a "doc_info", a hashref with
+# ~static:
+#   doc_tex: user-provided path to tex file
+#   doc_base: filename component of tex file, sans ".tex"
+#   doc_log: path to "log" file, latex log -- subtly different from stdout
+#   doc_aux: path to "aux" file (references, etc.)
+#   doc_bbl: path to "bbl" file, bibtex output
+#   doc_blg: path to "blg" file, bibtex log
+#   doc_dvi: path to output DVI file (or PDF, for PDFlatex)
+#   doc_tocs: jSet of paths to "toc", "lof", "lot" files,
+#             table-of-contents/figures/tables.  starts empty, discovered
+#   doc_tocs_maybe: set of things to be discovered for doc_tocs
+#   doc_idx: path to "idx" file, auto-generated index terms from latex
+#   doc_ind: path to "ind" file, makeindex output
+#   doc_ilg: path to "ilg" file, makeindex log on .idx file
+#   use_bibtex: flag
+#   use_makeindex: flag; starts out 0, is auto-detected
+#   bibtex_deps: set of bibtex input deps (bib, bst, ...)
+#   tex_deps: set of other files that top-level paper depends on;
+#     these files MUST be present (figures, etc.)
+# dynamic:
+#   stale: jSet of files known to be outdated, regardless of mtime
+#          (needed in case of matching mtimes)
+#          USE CAUTION putting things in here, as they may be deleted.
+#   lastrun_latex: object from run_latex() or undef
+#   lastrun_bibtex: object from run_bibtex() or undef
+#
+# common "lastrun" fields:
+#     foo_stat: exit() code from called program
+#     outcome: RUN_FINAL etc.
+#     parsed: returned from output parser
+#     report: listref of status messages, without newlines
+#     dep_target: "main" output target name
+#     deps_claimed: jSet of "claimed" dependences
+#     deps_seen: jSet of files known to have been read
+sub init_doc_info($$$) {
+  my ($master_tex, $bibtex_dep_list, $other_dep_list) = @_;
+  my $di = {};
+  $$di{doc_tex} = $master_tex;
+
+  my $doc_dir = dirname($master_tex);
+  if ($doc_dir ne ".") {
+    die "directory name seen in input name '$master_tex'; not supported, sorry"
+  }
+
+  $$di{doc_base} = basename($master_tex);
+  if ($$di{doc_base} =~ /^(.+)\.tex$/i) {
+    $$di{doc_base} = $1;
+  } else {
+    die "input name '$master_tex' doesn't end in .tex";
+  }
+
+  foreach my $ext (qw{log aux bbl blg dvi idx ind ilg}) {
+    $$di{"doc_$ext"} = "$$di{doc_base}.$ext";
+  }
+  if ($UsePdflatex) {
+    $$di{doc_dvi} = "$$di{doc_base}.pdf";
+  }
+  $$di{doc_tocs} = new jSet();
+  $$di{doc_tocs_maybe} = new_from_list
+      jSet(map { "$$di{doc_base}.$_" } qw{toc lof lot});
+
+  $$di{bibtex_deps} =
+    new_from_list jSet(map { jTexTools::trim_fname($_) } @$bibtex_dep_list);
+  $$di{use_bibtex} = ($$di{bibtex_deps}->empty()) ? 0 : 1;
+
+  $$di{use_makeindex} = 0;
+
+  $$di{tex_deps} = new_from_list jSet(map { jTexTools::trim_fname($_) }
+                                      @$other_dep_list);
+
+  $$di{stale} = new jSet();
+  $$di{lastrun_latex} = undef;
+  $$di{lastrun_bibtex} = undef;
+
+  discover_optional_files($di, 0);
+
+  return $di;
+}
+
+
+# discover when optional table-of-contents/figures/etc. files are in use
+sub discover_optional_files($$) {
+  my ($di, $flag_targs_stale) = @_;
+  foreach my $file ($$di{doc_tocs_maybe}->list_all()) {
+    if (!$$di{doc_tocs}->test($file) && (-e $file)) {
+      dprint "discovered table-of file '$file', adding to doc_tocs";
+      $$di{doc_tocs}->insert($file);
+      if ($flag_targs_stale) {
+        $$di{stale}->insert($$di{doc_dvi});
+      }
+    }
+  }
+  if (!$$di{use_makeindex} && (-e $$di{doc_idx})) {
+    dprint "discovered index file '$$di{doc_idx}', enabling makeindex";
+    $$di{use_makeindex} = 1;
+    if ($flag_targs_stale) {
+      $$di{stale}->insert($$di{doc_ind});
+    }
+  }
+}
+
+
+# function is read-only
+# sources: jSet of input files to consider
+# targets: jSet of output files
+# stale: jSet of filenames to consider "stale", regardless of mtime
+# ignore_targ_mtime: jSet of filenames to exclude from target mtime checks
+sub should_run_common($$$$) {
+  my ($sources, $targets, $stale, $ignore_targ_mtime) = @_;
+  my $func = "should_run_common";
+  my $ldebug = 1;
+  my $ldp = ($ldebug) ? sub { dprint $_[0] } : sub { }; # "local debug print"
+
+  my ($max_src_mtime, $min_targ_mtime);
+  my ($stale_src, $missing_src) = (0, 0);
+  my ($stale_targ, $missing_targ) = (0, 0);
+
+  if (!$stale->empty()) {
+    &$ldp("$func: local stale set: " . join(" ", $stale->list_all()));
+  }
+
+  foreach my $src ($sources->list_all()) {
+    if (!(-e $src)) {
+      &$ldp("$func: src $src missing");
+      $missing_src = 1;
+    } elsif ($stale->test($src)) {
+      &$ldp("$func: src $src is marked stale");
+      $stale_src = 1;
+    } else {
+      my $mtime = get_mtime($src);
+      &$ldp("$func: src $src mtime $mtime");
+      $max_src_mtime = max($max_src_mtime, $mtime);
+    }
+  }
+
+  foreach my $targ ($targets->list_all()) {
+    if (!(-e $targ)) {
+      &$ldp("$func: targ $targ missing");
+      $missing_targ = 1;
+    } elsif ($stale->test($targ)) {
+      &$ldp("$func: targ $targ is marked stale");
+      $stale_targ = 1;
+    } elsif ($ignore_targ_mtime->test($targ)) {
+      &$ldp("$func: ignoring mtime on targ $targ");
+    } else {
+      my $mtime = get_mtime($targ);
+      &$ldp("$func: targ $targ mtime $mtime");
+      $min_targ_mtime = min($min_targ_mtime, $mtime);
+    }
+  }
+
+  if (defined($max_src_mtime) && defined($min_targ_mtime) &&
+      ($max_src_mtime > $min_targ_mtime)) {
+    $stale_targ = 1;
+  }
+
+  &$ldp(sprintf("$func: max_src_mtime %s min_targ_mtime %s",
+                    str_undef($max_src_mtime), str_undef($min_targ_mtime)));
+  &$ldp("$func: stale_src $stale_src missing_src $missing_src " .
+            "stale_targ $stale_targ missing_targ $missing_targ");
+
+  my $result;
+  if ($stale_src || $missing_src) {
+    $result = SHOULD_DEFER;
+  } elsif ($stale_targ || $missing_targ) {
+    $result = SHOULD_YES;
+  } else {
+    $result = SHOULD_NO;
+  }
+
+  &$ldp("$func: result $ShouldRunNames[$result]");
+  return $result;
+}
+
+
+# query: should we run latex, for this iteration?
+# (i.e. is output outdated, and inputs exist to do something
+# useful?)
+#
+# clears and rewrites "in_deps_ret", a jSet of all possible input deps.
+sub should_run_latex($$) {
+  my ($di, $in_deps_ret) = @_;
+  my $func = "should_run_latex";
+
+  # Note: we care about the .aux even in the presence of the .dvi, in case the
+  # .dvi contains outdated reference info from a manual run of latex.  This
+  # isn't completely foolproof vs. manual runs, but forcing at least one run
+  # of latex each time "just to see" is lame too.
+
+  my $src_deps = new_from_list jSet($$di{doc_tex});
+  $src_deps->union($$di{tex_deps});
+
+  # "soft" dependences (things we care about if they're present, but which
+  # we'll deal with through other means if they're absent)
+  my $soft_deps = new_from_list jSet($$di{doc_aux}, $$di{doc_bbl},
+                                     $$di{doc_ind});
+  $soft_deps->union($$di{doc_tocs});
+
+  # insert soft_deps which currently exist, into src_deps
+  $src_deps->insert(grep { -e $_ } $soft_deps->list_all());
+
+  $in_deps_ret->clear();
+  $in_deps_ret->union($src_deps);
+  $in_deps_ret->union($soft_deps);      # includes even missing files
+
+  my $targs = new_from_list jSet($$di{doc_aux}, $$di{doc_dvi});
+  $targs->union($$di{doc_tocs});
+  if ($$di{use_makeindex}) { $targs->insert($$di{doc_idx}); }
+
+  # Special cases: ignore the stale-ness of aux, since the latex run is the
+  # sole way to produce a newer copy.  Ignore a stale bbl if the aux is also
+  # stale, since we know the stale aux will cause the bbl to be regenerated.
+  my $local_stale = $$di{stale}->copy();
+  if ($local_stale->test($$di{doc_bbl}) && $local_stale->test($$di{doc_aux})) {
+    $local_stale->erase($$di{doc_bbl});
+  }
+  $local_stale->erase($$di{doc_aux});
+  # ignore staleness of other files latex regenerates authoritatively
+  $local_stale->subtract($$di{doc_tocs});
+  if ($$di{use_makeindex}) { $local_stale->erase($$di{doc_ind}); }
+
+  # ignore mtime (for "is target stale?" purposes) of latex output files which
+  # will have their mtimes reset after run, if they are unchanged.  otherwise,
+  # we'd loop forever.
+  my $ignore_targ_mtime = new_from_list jSet($$di{doc_aux});
+  $ignore_targ_mtime->union($$di{doc_tocs});
+  if ($$di{use_makeindex}) { $ignore_targ_mtime->insert($$di{doc_idx}); }
+
+  my $result = should_run_common($src_deps, $targs, $local_stale,
+                                 $ignore_targ_mtime);
+  dprint "$func: $ShouldRunNames[$result]";
+  return $result;
+}
+
+
+# query: should we run bibtex, for this iteration?
+#
+# clears and rewrites "in_deps_ret", a jSet of all possible input deps.
+sub should_run_bibtex($$) {
+  my ($di, $in_deps_ret) = @_;
+  my $func = "should_run_bibtex";
+
+  # We'll only ever say "yes" if bibtex is in use, and doc_aux is present.
+  # If so, we'll run iff the .bbl is (absent or outdated).
+  # (If .aux is missing, latex needs to run first to create it.)
+
+  if (!$$di{use_bibtex}) { return SHOULD_NO; }
+
+  my $src_deps = new_from_list jSet($$di{doc_aux});
+  $src_deps->union($$di{bibtex_deps});
+
+  $in_deps_ret->clear();
+  $in_deps_ret->union($src_deps);
+
+  my $targs = new_from_list jSet($$di{doc_bbl});
+
+  my $result = should_run_common($src_deps, $targs, $$di{stale},
+                                new jSet());
+  dprint "$func: $ShouldRunNames[$result]";
+  return $result;
+}
+
+
+# query: should we run makeindex, for this iteration?
+#
+# clears and rewrites "in_deps_ret", a jSet of all possible input deps.
+sub should_run_makeindex($$) {
+  my ($di, $in_deps_ret) = @_;
+  my $func = "should_run_makeindex";
+
+  # We'll only ever say "yes" if makeindex is in use, and .idx is present,
+  # If so, we'll run iff the .ind is (absent or outdated).
+
+  if (!$$di{use_makeindex}) { return SHOULD_NO; }
+
+  my $src_deps = new_from_list jSet($$di{doc_idx});
+  # placeholder
+  #$src_deps->union($$di{makeindex_deps});
+
+  $in_deps_ret->clear();
+  $in_deps_ret->union($src_deps);
+
+  my $targs = new_from_list jSet($$di{doc_ind});
+
+  my $result = should_run_common($src_deps, $targs, $$di{stale},
+                                new jSet());
+  dprint "$func: $ShouldRunNames[$result]";
+  return $result;
+}
+
+
+# run latex once, return object with info about that run.
+#
+# if "<document>.aux" existed beforehand as its contents are unchanged by
+# this run, then reset the mtime on that file after running.
+sub run_latex($$) {
+  my ($doc_info, $opts) = @_;
+  if (!defined($opts)) { $opts = {}; }
+  my @latex_cmd;
+  push @latex_cmd, (($UsePdflatex) ? $Pdflatex : $Latex);
+  push @latex_cmd, $$doc_info{doc_tex};
+
+  my $aux = $$doc_info{doc_aux};
+  my $aux_undoer = (-e $aux) ? gen_mtime_undoer($aux) : undef;
+  my @toc_undoers = map { (-e $_) ? [ $_, gen_mtime_undoer($_)] : undef
+                            } $$doc_info{doc_tocs}->list_all();
+  my $idx_undoer = ($$doc_info{use_makeindex} && (-e $$doc_info{doc_idx}))
+      ? gen_mtime_undoer($$doc_info{doc_idx}) : undef;
+
+  if (!$Silent) {
+    print join(" ", @latex_cmd) . "\n";
+  }
+  my $redir_spec = { stdin => "/dev/null" };
+  my $redir_sub = sub { jExecTools::redirect_stdio($redir_spec) };
+
+  my $latex_out = jExecTools::backtick_cmd(\@latex_cmd, $redir_sub);
+
+  if (!defined($latex_out)) {
+    die "couldn't run latex";
+  };
+  my $latex_stat = shift @$latex_out;
+
+  # At this point, stdout from latex is in latex_out.  We can choose to
+  # use it for parsing, or load the ".log" file instead.  The two have
+  # subtly different syntactic quirks, and the latter is more easily
+  # analyzed, so perhaps it's a better choice.
+  if (LATEX_USE_STDOUT) {
+    foreach my $l (@$latex_out) { chomp $l; }   # edit in-place
+  } else {
+    $latex_out = load_textfile($$doc_info{doc_log});
+  }
+
+  my $parse_opts = { dump_parsed => 0 };
+  my $parsed = jTexTools::parse_latex_out($latex_out, $parse_opts);
+  my $need_rerun = $$parsed{need_rerun};
+
+  my $aux_unchanged = 0;
+  if (defined($aux_undoer)) { $aux_unchanged = &$aux_undoer(); }
+  my $idx_unchanged = 0;
+  if (defined($idx_undoer)) { $idx_unchanged = &$idx_undoer(); }
+
+  foreach my $toc_undo (@toc_undoers) {
+    # reset table-of-contents mtimes, if contents are unchanged
+    if ($toc_undo) {
+      my ($fname, $undoer) = @$toc_undo;
+      if (!&$undoer()) {
+        # t-o-c file contents changed; force re-run
+        $need_rerun = 1;
+      }
+    }
+  }
+
+  return { latex_stat => $latex_stat,
+           aux_unchanged => $aux_unchanged,
+           need_rerun => $need_rerun,
+           parsed => $parsed };
+}
+
+
+# run bibtex once, return object with info about that run.
+sub run_bibtex($$) {
+  my ($doc_info, $opts) = @_;
+  if (!defined($opts)) { $opts = {}; }
+  my $func = "run_bibtex";
+  my @bibtex_cmd = ($Bibtex, $$doc_info{doc_aux});
+
+  my $bbl = $$doc_info{doc_bbl};
+  my $bbl_old_md5 = (-e $bbl) ? md5_hex_file($bbl) : undef;
+  # it's dangerous to use gen_mtime_undoer() here
+  #my $bbl_undoer = (-e $bbl) ? gen_mtime_undoer($bbl) : undef;
+
+  if (!$Silent) {
+    print join(" ", @bibtex_cmd) . "\n";
+  }
+  my $redir_spec = { stdin => "/dev/null" };
+  my $redir_sub = sub { jExecTools::redirect_stdio($redir_spec) };
+
+  my $bibtex_out = jExecTools::backtick_cmd(\@bibtex_cmd, $redir_sub);
+
+  if (!defined($bibtex_out)) {
+    die "couldn't run bibtex";
+  };
+  my $bibtex_stat = shift @$bibtex_out;
+
+  if (BIBTEX_USE_STDOUT) {
+    foreach my $l (@$bibtex_out) { chomp $l; }  # edit in-place
+  } else {
+    $bibtex_out = load_textfile($$doc_info{doc_blg});
+  }
+
+  my $parse_opts = { dump_parsed => 0 };
+  my $parsed = jTexTools::parse_bibtex_out($bibtex_out, $parse_opts);
+
+  my $bbl_unchanged = 0;
+  if (defined($bbl_old_md5) && (md5_hex_file($bbl) eq $bbl_old_md5)) {
+    dprint "$func: bbl unchanged";
+    $bbl_unchanged = 1;
+  }
+  #if (defined($bbl_undoer)) { $bbl_unchanged = &$bbl_undoer(); }
+
+  return { bibtex_stat => $bibtex_stat,
+           bbl_unchanged => $bbl_unchanged,
+           parsed => $parsed };
+}
+
+
+# run makeindex once, return object with info about that run.
+sub run_makeindex($$) {
+  my ($doc_info, $opts) = @_;
+  if (!defined($opts)) { $opts = {}; }
+  my $func = "run_makeindex";
+  my @cmd = ($Makeindex, $$doc_info{doc_idx});
+
+  my $ind = $$doc_info{doc_ind};
+  my $ind_old_md5 = (-e $ind) ? md5_hex_file($ind) : undef;
+
+  if (!$Silent) {
+    print join(" ", @cmd) . "\n";
+  }
+  my $redir_spec = { stdin => "/dev/null",
+                     stderr => "/dev/null" };   # makeindex spams to stderr
+  my $redir_sub = sub { jExecTools::redirect_stdio($redir_spec) };
+
+  my $cmd_out = jExecTools::backtick_cmd(\@cmd, $redir_sub);
+
+  if (!defined($cmd_out)) {
+    die "couldn't run makeindex";
+  };
+  my $cmd_stat = shift @$cmd_out;
+
+  $cmd_out = load_textfile($$doc_info{doc_ilg});
+
+  my $parse_opts = { dump_parsed => 0 };
+  my $parsed = jTexTools::parse_makeindex_out($cmd_out, $parse_opts);
+
+  my $ind_unchanged = 0;
+  if (defined($ind_old_md5) &&
+      (md5_hex_file($$doc_info{doc_ind}) eq $ind_old_md5)) {
+    $ind_unchanged = 1;
+  }
+
+  return { makeindex_stat => $cmd_stat,
+           ind_unchanged => $ind_unchanged,
+           parsed => $parsed };
+}
+
+
+sub report_missing_deps($$$$) {
+  my ($doc_info, $target, $claimed_deps, $inputs_seen) = @_;
+  my $missing_deps = new jSet();
+
+  foreach my $dep ($inputs_seen->list_all()) {
+    if ($dep =~ $IgnoreDepRE) { next; }
+    if ($claimed_deps->test($dep)) { next; }
+    $missing_deps->insert($dep);
+  }
+
+  if (!$missing_deps->empty()) {
+    foreach my $dep ($missing_deps->list_all()) {
+      print "$Prog: warning: unreported dependence for $target: $dep\n";
+    }
+  }
+}
+
+
+sub print_runinfo_reports($$) {
+  my ($doc_info, $candidate_exit_code) = @_;
+  foreach my $tool (qw{latex bibtex makeindex}) {
+    my $ri_key = "lastrun_$tool";
+    if (defined(my $run_info = $$doc_info{$ri_key})) {
+      if (!$Silent && ($tool eq "latex") && ($candidate_exit_code == 0) &&
+          defined(my $pages = $$run_info{parsed}{n_pages})) {
+        print "Pages: $pages\n";
+      }
+      if (defined(my $report = $$run_info{report})) {
+        if (@$report) {
+          if ($tool ne "latex") {
+            print "-- $tool --\n";
+          }
+          print join("\n", @$report) . "\n";
+        }
+      }
+      if (defined($$run_info{deps_seen})) {
+        report_missing_deps($doc_info, $$run_info{dep_target},
+                            $$run_info{deps_claimed},
+                            $$run_info{deps_seen});
+      }
+    }
+  }
+}
+
+
+# post-process the output from run_latex(): decide if it was good to go,
+# a failure, etc.; prepare a report which might be shown to the user;
+# and, twiddle any metadata needed to make this run play nice with others.
+sub postproc_latex_run($$$) {
+  my ($doc_info, $run_info, $in_deps) = @_;
+  my $parsed = $$run_info{parsed};
+
+  my $outcome;
+  if (($$parsed{n_errors} > 0) || ($$run_info{latex_stat} != 0)) {
+    if ($$parsed{n_errors} == 0) {
+      print "error: latex command returned status " .
+        $$run_info{latex_stat} . " (without error messages)\n";
+    }
+    $outcome = RUN_ERROR;
+  } elsif ($$run_info{need_rerun}) {
+    # we'll ignore missing files here, and complain about them at the end
+    $outcome = RUN_NEEDMORE;
+  } else {
+    $outcome = RUN_FINAL;
+  }
+
+  my @out_lines;
+  if ($outcome == RUN_NEEDMORE) {
+    # suppress warnings, since we'll be running latex again soon
+    foreach my $rec (@{$$parsed{report}}) {
+      if ($$rec[0] != REPORT_WARN) {
+        push @out_lines, $$rec[1];
+      }
+    }
+  } elsif ($outcome == RUN_ERROR) {
+    # suppress warnings about citations/references/etc. when errors occur
+    if (1) {
+      @out_lines = map { $$_[1] } 
+        grep { !($$_[1] =~ /warning: (Reference|Citation|Label)/i)  }
+          @{$$parsed{report}};
+    } else {
+      @out_lines = map { $$_[1] } @{$$parsed{report}};
+    }
+  } else {
+    # report all output, since we won't be running anymore
+    @out_lines = map { $$_[1] } @{$$parsed{report}};
+  }
+
+  dprint "latex outcome: $RunOutcomeNames[$outcome]";
+  $$run_info{outcome} = $outcome;
+  $$run_info{dep_target} = $$doc_info{doc_dvi};
+  $$run_info{deps_claimed} = $in_deps->copy();
+  $$run_info{deps_seen} = $$parsed{in_files}->copy();
+  $$run_info{report} = \@out_lines;
+
+  $$doc_info{lastrun_latex} = $run_info;
+
+  # check for nonexistent reported inputs; these typically indicate that
+  # the filename parser has gotten confused by other parenthesized stuff
+  # in the output of latex
+  foreach my $seen_dep ($$run_info{deps_seen}->list_all()) {
+    if (!(-e $seen_dep)) {
+      die "nonexistent filename \"$seen_dep\" parsed from latex";
+    }
+  }
+
+  my @targs = ($$doc_info{doc_aux}, $$doc_info{doc_dvi},
+               $$doc_info{doc_tocs}->list_all());
+  if ($outcome == RUN_FINAL) {
+    $$doc_info{stale}->erase(@targs);
+  } else {
+    $$doc_info{stale}->insert(@targs);
+  }
+
+  if ($$doc_info{use_bibtex} && !$$run_info{aux_unchanged}) {
+    # flag the bbl file as outdated, since we know we've monkeyed with the
+    # aux-file.  we can't just rely on file mtime, since we may have done a
+    # latex-bibtex-latex sequence within the same second.  (we shouldn't just
+    # delete the bbl, as that can cause changes in the aux file contents next
+    # time, leading to convergence failure.)
+    $$doc_info{stale}->insert($$doc_info{doc_bbl});
+  }
+
+  # update doc_tocs/etc. with any newly-created files
+  discover_optional_files($doc_info, 1);
+
+  return $outcome;
+}
+
+
+sub postproc_bibtex_run($$$) {
+  my ($doc_info, $run_info, $in_deps) = @_;
+  my $parsed = $$run_info{parsed};
+
+  my $outcome;
+
+  if (($$parsed{n_errors} > 0) || ($$run_info{bibtex_stat} != 0)) {
+    if ($$parsed{n_errors} == 0) {
+      print "error: bibtex command returned status " .
+        $$run_info{bibtex_stat} . " (without error messages)\n";
+    }
+    $outcome = RUN_ERROR;
+  } else {
+    $outcome = RUN_FINAL;
+  }
+
+  my @out_lines;
+  @out_lines = map { $$_[1] } @{$$parsed{report}};
+
+  dprint "bibtex outcome: $RunOutcomeNames[$outcome]";
+  $$run_info{outcome} = $outcome;
+  $$run_info{dep_target} = $$doc_info{doc_bbl};
+  $$run_info{deps_claimed} = $in_deps->copy();
+  $$run_info{deps_seen} = $$parsed{in_files}->copy();
+  $$run_info{report} = \@out_lines;
+
+  $$doc_info{lastrun_bibtex} = $run_info;
+
+  if ($outcome != RUN_ERROR) {
+    foreach my $seen_dep ($$run_info{deps_seen}->list_all()) {
+      if (!(-e $seen_dep)) {
+        # Ignore input files reported by bibtex which don't exist as viewed
+        # from the build dir.  (bibtex doesn't always bother printing
+        # pathnames for library files which it reads from
+        # e.g. /usr/share/texmf.  if it exited without error, we'll infer that
+        # the file must've been found somewhere.  sigh.)
+        $$run_info{deps_seen}->erase($seen_dep);
+      }
+    }
+  }
+
+  if ($outcome == RUN_FINAL) {
+    $$doc_info{stale}->erase($$run_info{dep_target});
+  } elsif ($outcome == RUN_ERROR) {
+    $$doc_info{stale}->insert($$run_info{dep_target});
+  }
+
+  if ($$run_info{bbl_unchanged}) {
+    my $max_dep_mtime = max(map { (-e $_) ? get_mtime($_) : undef }
+                            $in_deps->list_all());
+    if (defined($max_dep_mtime)) {
+      dprint "bbl unchanged; rolling back to max_dep_mtime $max_dep_mtime";
+      set_mtime($$doc_info{doc_bbl}, $max_dep_mtime);
+    }
+  } else {
+    $$doc_info{stale}->insert($$doc_info{doc_dvi});
+  }
+
+  return $outcome;
+}
+
+
+sub postproc_makeindex_run($$$) {
+  my ($doc_info, $run_info, $in_deps) = @_;
+  my $parsed = $$run_info{parsed};
+
+  my $outcome;
+
+  if (($$parsed{n_errors} > 0) || ($$run_info{makeindex_stat} != 0)) {
+    dprint "makeindex n_errors $$parsed{n_errors} " .
+        "stat $$run_info{makeindex_stat}";
+    if ($$parsed{n_errors} == 0) {
+      print "error: makeindex command returned status " .
+        $$run_info{makeindex_stat} . " (without error messages)\n";
+    }
+    $outcome = RUN_ERROR;
+  } else {
+    $outcome = RUN_FINAL;
+  }
+
+  my @out_lines;
+  @out_lines = map { $$_[1] } @{$$parsed{report}};
+
+  dprint "makeindex outcome: $RunOutcomeNames[$outcome]";
+  $$run_info{outcome} = $outcome;
+  $$run_info{dep_target} = $$doc_info{doc_ind};
+  $$run_info{deps_claimed} = $in_deps->copy();
+  $$run_info{deps_seen} = $$parsed{in_files}->copy();
+  $$run_info{report} = \@out_lines;
+
+  $$doc_info{lastrun_makeindex} = $run_info;
+
+  if ($outcome == RUN_FINAL) {
+    $$doc_info{stale}->erase($$run_info{dep_target});
+  } elsif ($outcome == RUN_ERROR) {
+    $$doc_info{stale}->insert($$run_info{dep_target});
+    # we have a problem here: we'd like to flag .idx stale so that it gets
+    # deleted/regenerated, but makeindex error messages reference it
+    # directly, so deleting it would leave the user unable to inspect it.
+    #$$doc_info{stale}->insert($$doc_info{doc_idx});
+  }
+
+  if ($$run_info{ind_unchanged}) {
+  } else {
+    $$doc_info{stale}->insert($$doc_info{doc_dvi});
+  }
+
+  return $outcome;
+}
+
+
+sub sig_cleanup($$) {
+  my ($sig_name, $doc_info) = @_;
+  $SIG{$sig_name} = "DEFAULT";
+  my $stale = $$doc_info{stale};
+  print STDERR "$Prog: caught signal $sig_name, exiting\n";
+  if (!$stale->empty()) {
+    print STDERR "$Prog: deleting stale files: " .
+      join(" ", $stale->list_all()) . "\n";
+    map { unlink $_ } $stale->list_all();
+  }
+  kill $sig_name, $$;
+}
+
+
+sub toplev() {
+  my $doc_info;
+  {
+    my @bib_deps = split($DepDelim, $BibtexDeps);
+    my @tex_deps = split($DepDelim, $TexDeps);
+    $doc_info = init_doc_info($MasterTex, \@bib_deps, \@tex_deps);
+    $SIG{INT} = $SIG{TERM} = $SIG{HUP} = sub {
+      sig_cleanup($_[0], $doc_info);
+    };
+  }
+
+  my $latex_in_deps = new jSet();
+  my $bibtex_in_deps = new jSet();
+  my $makeindex_in_deps = new jSet();
+  my $toplev_exit = 0;
+  my $iter_limit = 20;          # prevent runaway execution
+  my $iter_count = 0;
+
+  TOP_ITER: while ($iter_count < $iter_limit) {
+    my $run_flag = 0;
+    my $defer_flag = 0;
+
+    dprint "top-level iter #$iter_count, stale set: " .
+      join(" ", $$doc_info{stale}->list_all);
+
+    # this is brute-force iterative, roughly sorted by dependence topology,
+    # to allow flexibility in hacking in auxilary tools which may update
+    # various files (bibtex, makeindex, ...) without needing to explicitly
+    # declare dependences.  it will likely end up a bit stat()-heavy,
+    # as a result.
+
+    {
+      my $should_bib = should_run_bibtex($doc_info, $bibtex_in_deps);
+      if ($should_bib == SHOULD_DEFER) {
+        $defer_flag = 1;
+      } elsif ($should_bib == SHOULD_YES) {
+        $run_flag = 1;
+        my $run_info = run_bibtex($doc_info, undef);
+        my $run_class =
+          postproc_bibtex_run($doc_info, $run_info, $bibtex_in_deps);
+        if ($run_class == RUN_ERROR) {
+          my $msg = "$Prog: error: bibtex failed.";
+          if (defined($$doc_info{lastrun_bibtex})) {
+            push @{$$doc_info{lastrun_bibtex}{report}}, $msg;
+          } else {
+            print "$msg\n";
+          }
+          $toplev_exit = 1;
+          last TOP_ITER;
+        }
+      }
+    }
+
+    {
+      my $should_tex = should_run_latex($doc_info, $latex_in_deps);
+      if ($should_tex == SHOULD_DEFER) {
+        $defer_flag = 1;
+      } elsif ($should_tex == SHOULD_YES) {
+        $run_flag = 1;
+        my $run_info = run_latex($doc_info, undef);
+        my $run_class =
+          postproc_latex_run($doc_info, $run_info, $latex_in_deps);
+        if ($run_class == RUN_ERROR) {
+          my $msg = "$Prog: error: latex failed.";
+          if (defined($$doc_info{lastrun_latex})) {
+            push @{$$doc_info{lastrun_latex}{report}}, $msg;
+          } else {
+            print "$msg\n";
+          }
+          $toplev_exit = 1;
+          last TOP_ITER;
+        }
+      }
+    }
+
+    # put makeindex after latex, so that edits to *.tex get translated into
+    # a new .idx before we retry makeindex (otherwise, we'd either get
+    # stuck on the same error over and over, or we'd have to delete the
+    # .idx file which makes it harder to diagnose errors).
+    {
+      my $should_idx = should_run_makeindex($doc_info, $makeindex_in_deps);
+      if ($should_idx == SHOULD_DEFER) {
+        $defer_flag = 1;
+      } elsif ($should_idx == SHOULD_YES) {
+        $run_flag = 1;
+        my $run_info = run_makeindex($doc_info, undef);
+        my $run_class =
+          postproc_makeindex_run($doc_info, $run_info, $makeindex_in_deps);
+        if ($run_class == RUN_ERROR) {
+          my $msg = "$Prog: error: makeindex failed.";
+          if (defined($$doc_info{lastrun_makeindex})) {
+            push @{$$doc_info{lastrun_makeindex}{report}}, $msg;
+          } else {
+            print "$msg\n";
+          }
+          $toplev_exit = 1;
+          last TOP_ITER;
+        }
+      }
+    }
+
+    if (!$run_flag && !$defer_flag) {
+      # Nothing was run or deferred this iteration; assume that nothing will
+      # happen next time, either, so it's time to go.
+      last TOP_ITER;
+    } elsif (!$run_flag && $defer_flag) {
+      # We've deferred some operations, but haven't actually done anything
+      # this time.  In our current setup, this is bad: we should only defer
+      # things in order to run other things first, so defer-without-run
+      # means we've dropped the ball and will wait forever.
+      die "defer-without-run in iteration $iter_count; waiting forever?"
+    }
+    $iter_count++;
+  }
+
+  if ($iter_count >= $iter_limit) {
+    die "iteration limit $iter_limit reached; failing to converge?";
+  }
+
+  print_runinfo_reports($doc_info, $toplev_exit);
+  if (defined(my $latex_run = $$doc_info{lastrun_latex})) {
+    if (defined(my $missing = $$latex_run{parsed}{missing_files})) {
+      if (!$missing->empty()) {
+        #$toplev_exit = 1;
+      }
+    }
+  }
+
+  {
+    my $stale = $$doc_info{stale};
+    if (!$stale->empty()) {
+      if ($toplev_exit == 0) {
+        die "$Prog: apparent success, with leftover stale files " .
+          join(" ", $stale->list_all());
+      }
+      dprint "deleting leftover stale files: " . join(" ", $stale->list_all());
+      map { unlink $_ } $stale->list_all();
+    }
+  }
+
+  return $toplev_exit;
+}
