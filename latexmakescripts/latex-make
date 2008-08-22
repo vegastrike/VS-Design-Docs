@@ -36,7 +36,7 @@ my $Latex = "latex";
 my $Pdflatex = "pdflatex";
 my $Bibtex = "bibtex";
 my $Makeindex = "makeindex";
-my $IgnoreDepRE = qr{^(?:/usr/share/.*)$}x;
+my $IgnoreDepRE = qr{^(?:/usr/share/.*|/var/lib/texmf/.*|/etc/texmf/.*)$}x;
 
 sub usage() {
   print STDOUT <<EOF;
