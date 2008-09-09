@@ -1,1 +1,13 @@
+Instructions for building the PDF:
+
+Most newer systems have texlive.
+In that case, use this to compile it:
+$ make -f Makefile.live
+
+If you have the older tex (base) installed
+$ make -f Makefile.base
+
+If you get errors about "subfigure.sty", make sure you have the extras package installed.
+On Ubuntu, you can install this with:
+$ sudo apt-get install texlive-latex-extra
 
