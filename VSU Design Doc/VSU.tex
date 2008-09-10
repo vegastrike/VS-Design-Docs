@@ -56,41 +56,34 @@ Ed. JS}
 %\index{Fakecheese@\textit{Fakecheese}}
 %\index{cheese@(cheese)!Blue Cheese} % makes (cheese)appear as if spelled ``cheese''
 
+% Set up appendix alpha-numbering
 \chapter*{APPENDICES}
-\addtocounter{chapter}{1}
-\setcounter{section}{0}
 \addcontentsline{toc}{chapter}{APPENDICES}
-\setcounter{section}{0}
-\renewcommand{\thesection}{A.\arabic{section}}
-\setcounter{figure}{0}
-\renewcommand{\thefigure}{A-\arabic{figure}}
-\setcounter{table}{0}
-\renewcommand{\thetable}{A-\arabic{table}}
+\newcounter{appendixcounter}
+\setcounter{appendixcounter}{0}
+\renewcommand{\thechapter}{\Alph{appendixcounter}}
+\renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+\renewcommand{\thetable}{\thechapter-\arabic{table}}
+%\clearpage
 
-\section*{Appendix A: Species information}
-\addcontentsline{toc}{chapter}{Appendix A: Species information (In-game Viewpoint circa 3276 CE)}
+\stepcounter{appendixcounter}
+\refstepcounter{chapter}
+\section*{Appendix \Alph{appendixcounter}: Species information}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Species information (In-game Viewpoint circa 3276 CE)}
 \input{appendixA}
-\addtocounter{chapter}{1}
+
 \clearpage
-\section*{Appendix B: Faction information}
-\addcontentsline{toc}{chapter}{Appendix B: Faction information (In-game Viewpoint circa 3276 CE)}
-\setcounter{section}{0}
-\renewcommand{\thesection}{B.\arabic{section}}
-\setcounter{figure}{0}
-\renewcommand{\thefigure}{B-\arabic{figure}}
-\setcounter{table}{0}
-\renewcommand{\thetable}{B-\arabic{table}}
+\stepcounter{appendixcounter}
+\refstepcounter{chapter}
+\section*{Appendix \Alph{appendixcounter}: Faction information}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Faction information (In-game Viewpoint circa 3276 CE)}
 \input{appendixB}
-\addtocounter{chapter}{1}
+
 \clearpage
-\section*{Appendix C: Vega Strike Trailer Script}
-\addcontentsline{toc}{chapter}{Appendix C: Vega Strike Trailer Script}
-\setcounter{section}{0}
-\renewcommand{\thesection}{C.\arabic{section}}
-\setcounter{figure}{0}
-\renewcommand{\thefigure}{C-\arabic{figure}}
-\setcounter{table}{0}
-\renewcommand{\thetable}{C-\arabic{table}}
+\stepcounter{appendixcounter}
+\refstepcounter{chapter}
+\section*{Appendix \Alph{appendixcounter}: Vega Strike Trailer Script}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Vega Strike Trailer Script}
 \input{appendixC}
 
 {
@@ -99,6 +92,9 @@ Ed. JS}
 \small
 \cleardoublepage
 \renewcommand\bibname{References}
+\renewcommand{\thechapter}{References}
+\refstepcounter{chapter}
+\label{References:References}
 \bibliography{biblio}
 }
 \addcontentsline{toc}{chapter}{References}
@@ -106,11 +102,18 @@ Ed. JS}
 \input{glossarydefs}
 
 \clearpage
+\phantomsection
+\renewcommand{\thechapter}{Glossary}
+\refstepcounter{chapter}
+\label{Glossary:Glossary}
 \printglossary
 \addcontentsline{toc}{chapter}{Glossary}
 
 \clearpage
 \phantomsection
+\renewcommand{\thechapter}{Index}
+\refstepcounter{chapter}
+\label{Index:Index}
 \addcontentsline{toc}{chapter}{Index}
 \printindex
 
