@@ -5,7 +5,8 @@ TEX_DEPS = overview.tex timeline.tex PCplots.tex random.tex \
 	splashnotice.tex remark.tex prettygloss.tex \
 	nomencldef.tex preface.tex texheader.tex \
 	profiles.tex portfolio_Aeran.tex portfolio_Andolian.tex \
-	glossarydefs.tex VSUreality.tex lifeinvsu.tex
+	glossarydefs.tex VSUreality.tex lifeinvsu.tex \
+        astrography-is-destiny.tex
 FIG_DEPS = ../images/AncestralShmrnArchitecture.png \
 	../images/Shmrn-footwear.png \
 	../images/Shmrn-pilot1.png \

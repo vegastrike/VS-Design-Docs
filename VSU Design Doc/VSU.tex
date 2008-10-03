@@ -39,6 +39,9 @@ Ed. JS}
 \chapter{Social Existence in the VSU}
 \input{lifeinvsu}
 
+\chapter{Astrography and its Impact on Destiny}
+\input{astrography-is-destiny}
+
 \chapter{Time-line (Omniscient Viewpoint)}
 \input{timeline}
 
@@ -88,8 +91,8 @@ Ed. JS}
 \clearpage
 \stepcounter{appendixcounter}
 \refstepcounter{chapter}
-\section*{Appendix \Alph{appendixcounter}: Vega Strike Trailer Script}
-\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Vega Strike Trailer Script}
+\section*{Appendix \Alph{appendixcounter}: Cinematic Scripts}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Cinematic Scripts}
 \input{appendixC}
 
 {
@@ -100,20 +103,21 @@ Ed. JS}
 \renewcommand\bibname{References}
 \renewcommand{\thechapter}{References}
 \refstepcounter{chapter}
+\phantomsection
+\addcontentsline{toc}{chapter}{References}
 \label{References:References}
 \bibliography{biblio}
 }
-\addcontentsline{toc}{chapter}{References}
-
-\input{glossarydefs}
 
 \clearpage
 \phantomsection
+\addcontentsline{toc}{chapter}{Glossary}
+\input{glossarydefs}
 \renewcommand{\thechapter}{Glossary}
 \refstepcounter{chapter}
 \label{Glossary:Glossary}
 \printglossary
-\addcontentsline{toc}{chapter}{Glossary}
+
 
 \clearpage
 \phantomsection
