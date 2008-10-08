@@ -4,9 +4,24 @@ TEX_DEPS = overview.tex timeline.tex PCplots.tex random.tex \
 	appendixA.tex appendixB.tex appendixC.tex \
 	splashnotice.tex remark.tex prettygloss.tex \
 	nomencldef.tex preface.tex texheader.tex \
-	profiles.tex portfolio_Aeran.tex portfolio_Andolian.tex \
-	glossarydefs.tex VSUreality.tex lifeinvsu.tex \
-        astrography-is-destiny.tex
+	profiles.tex glossarydefs.tex VSUreality.tex lifeinvsu.tex \
+	astrography-is-destiny.tex \
+	portfolio_Aeran.tex portfolio_Lmpl.tex \
+	portfolio_AndolianProtectorate.tex portfolio_Luddites.tex \
+	portfolio_Andolian.tex portfolio_Mechanist.tex \
+	portfolio_Bzbr.tex portfolio_Mishtali.tex \
+	portfolio_Confederation.tex portfolio_Nuhln.tex \
+	portfolio_CriminalElements.tex portfolio_Purist.tex \
+	portfolio_Dgn.tex portfolio_Purth.tex \
+	portfolio_Forsaken.tex portfolio_RlaanBriin.tex \
+	portfolio_Highborn.tex portfolio_Rlaan.tex \
+	portfolio_HomelandSecurity.tex portfolio_Saahasayaay.tex \
+	portfolio_HuntersGuild.tex portfolio_Shaper.tex \
+	portfolio_ISMG.tex portfolio_Shmrn.tex \
+	portfolio_ISO.tex portfolio_Spaceborn.tex \
+	portfolio_Klk'k.tex portfolio_Uln.tex \
+	portfolio_LIHW.tex portfolio_Unadorned.tex
+
 FIG_DEPS = ../images/AncestralShmrnArchitecture.png \
 	../images/Shmrn-footwear.png \
 	../images/Shmrn-pilot1.png \
