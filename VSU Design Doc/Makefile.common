@@ -18,7 +18,7 @@ TEX_DEPS = overview.tex timeline.tex PCplots.tex random.tex \
 	portfolio_HomelandSecurity.tex portfolio_Saahasayaay.tex \
 	portfolio_HuntersGuild.tex portfolio_Shaper.tex \
 	portfolio_ISMG.tex portfolio_Shmrn.tex \
-	portfolio_ISO.tex portfolio_Spaceborn.tex \
+	portfolio_ISO.tex \
 	portfolio_Klk'k.tex portfolio_Uln.tex \
 	portfolio_LIHW.tex portfolio_Unadorned.tex
 
