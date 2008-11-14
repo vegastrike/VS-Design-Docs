@@ -5,7 +5,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: jTexTools.pm,v 1.22 2008/08/21 01:18:51 jbrown Exp $
+# $Id: jTexTools.pm,v 1.23 2008/11/14 01:15:00 jbrown Exp $
 
 package jTexTools;
 
@@ -99,6 +99,18 @@ sub unsplit_latex_out($$) {
       $unsplit .= $line;
       my $is_contd = (length($line) == $max_print_line) &&
         defined($next);
+
+      if ($is_contd && ($next =~ /^\[\d+/)) {
+        # Additional pdflatex braindamage: when a page number print occurs
+        # immediately after a long-line split point, the usual separating
+        # whitespace/newline is omitted, e.g.
+        #    ....................(./paper.bbl\n
+        #    [6 <./Figures/...
+        # ...unsplits to "...(./paper.bbl[6 <./Figures/", which confuses the
+        # filename parser.  We'll attempt to hack around this by injecting a
+        # space before the continuation line.
+        $unsplit .= " ";
+      }
 
       if (!$is_contd && ($line =~ /^[{<(]/)) {
         # Further tex trainwreckery: pdftex screws up the line splitting

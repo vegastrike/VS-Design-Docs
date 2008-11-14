@@ -15,7 +15,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: latex-make,v 1.20 2008/07/06 18:55:07 jbrown Exp $
+# $Id: latex-make,v 1.22 2008/10/07 23:44:55 jbrown Exp $
 
 use strict;
 use warnings;
@@ -36,7 +36,7 @@ my $Latex = "latex";
 my $Pdflatex = "pdflatex";
 my $Bibtex = "bibtex";
 my $Makeindex = "makeindex";
-my $IgnoreDepRE = qr{^(?:/usr/share/.*|/var/lib/texmf/.*|/etc/texmf/.*)$}x;
+my $IgnoreDepRE = qr{^(?:/usr/share/.*|/projects/texlive/.*|/var/lib/texmf/.*|/etc/texmf/.*)$}x;
 
 sub usage() {
   print STDOUT <<EOF;
@@ -286,12 +286,22 @@ sub init_doc_info($$$) {
   $$di{doc_tocs_maybe} = new_from_list
       jSet(map { "$$di{doc_base}.$_" } qw{toc lof lot});
 
+  foreach my $bib_dep (@$bibtex_dep_list) {
+    if (! -e $bib_dep) {
+      die "missing explicit bibtex dep: '$bib_dep'";
+    }
+  }
   $$di{bibtex_deps} =
     new_from_list jSet(map { jTexTools::trim_fname($_) } @$bibtex_dep_list);
   $$di{use_bibtex} = ($$di{bibtex_deps}->empty()) ? 0 : 1;
 
   $$di{use_makeindex} = 0;
 
+  foreach my $other_dep (@$other_dep_list) {
+    if (! -e $other_dep) {
+      die "missing other explicit dep: '$other_dep'";
+    }
+  }
   $$di{tex_deps} = new_from_list jSet(map { jTexTools::trim_fname($_) }
                                       @$other_dep_list);
 
