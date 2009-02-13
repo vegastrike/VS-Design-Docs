@@ -39,10 +39,10 @@ conflict, should it ever occur, will almost certainly be arduously
 long, heavily automated, and completely boring to look at without a
 lot of magnification and false-color filters. FTL? Probably not
 possible. Manned airplane-like fighter-craft? Unlikely - missiles and
-probes do most of the potential jobs a lot better, can withstand much
-larger material stresses, don't die from radiation sickness, or run
-out of food and water if it takes weeks to get to the target - which,
-if there's no FTL, it probably will. As one can imagine, the list goes
+probes do most of the potential jobs a lot better. They can withstand much
+larger material stresses, don't die from radiation sickness, and don't run
+out of food and water if it takes weeks to get to the target (which,
+if there's no FTL, it probably will). As one can imagine, the list goes
 on.
 
 \subsection{Requirements of the VSU}
@@ -59,38 +59,199 @@ the game to be multi-player, thus ensuring that arbitrary dynamic time
 dilation would not be a viable game-play mechanic - much of the game
 must happen in something approximating ``real-time''.
 
+The canon of the VSU is therefore crafted, and occasionally
+reverse-engineered to fit game-play. Some may find this a backward
+approach. However, we began with a game concept, not a universe
+concept, so the direction of influence was to some degree
+unavoidable. Moreover, there are practical limitations of human
+attention, comfort, and even speculative game-engine capabilities that
+prevent us from creating content in a vacuum. If we were to approach
+the creation of the VSU for a game setting as if we were doing
+universe building for a novel or movie, it is almost certain we would
+produce something less than satisfying as a game-setting. That we have
+chosen to embrace this direction of influence rather than attempt to
+reverse it is indicative of the relative importance we place on the
+type of game we wish to create, even if it demands an impossible or
+implausible universe over the particulars of the universe designed to
+support it. It is not that we do not consider universe design
+important - the scope of this document should speak to that. Rather,
+to resolve certain tensions between game-play and reality as we know
+it, we have merely decided in advance to render decisions biased
+toward the former, because the fundamental drive that lead to the
+entire VS project was fuelled by a vision of a particular style of
+game-play and an engine that would support this sort of game across
+many universes, not by a desire to construct a particular new
+universe. While a fair portion of my own drive to work on VS is
+fuelled by the opportunity to add creative content to an original
+universe, this role must remain secondary to the development of an
+engine capable of providing the sort of game-play the project's
+founders envisioned if we are to pay proper respect to the wishes of
+those responsible for the VS project existing at all.
+
 %%%%%%%%%%%%
 %%%%%%%%%%%%
 
 
 \subsubsection{The VS game specification}
 \label{Danny's stuff goes here}
+
+The goal of VS engine development is to support a set of games with
+particular, similar features. In this sense, all of the games using
+the VS engine will be reflections, near or distant, of a sort of
+``Platonic'' Elite-like game. In the VSU, as in any other universe
+that aims to support such a space-trading-combat game, there are
+certain requirements, tenets and tropes of such games that have far
+reaching impacts on the sort of properties such a universe must have
+in order to make the sort of activities inherent in the desired
+game play internally coherent. Listed below are some such properties of
+VS engine-appropriate games (hereafter VSGs).
+
+\begin{itemize}
+
+\item Heritage
+
+VSGs will be able to trace their game play lineage to Elite~\cite{Elite},
+Privateer~\cite{Privateer}, and similar games.
+
+\item Setting
+
+VSGs will be primarily set in space, and focus primarily on actions
+taking place in space.
+
+\item Transactional economy
+
+Goods and services can be obtained through payment. Obtaining
+sufficient resources to pay for desired transactions is a key aspect
+of game play and progression.
+
+\item Means of Interactions with the Universe
+
+\begin{itemize}
+\item Avatar
+
+In keeping with the setting, the player's current spaceship will be
+their primary mechanism for interacting with the universe and its
+inhabitants. A more personal avatar may exist for interactions
+internal to bases, large starships, and planets, but is not expected
+to be used during the primary focus of game play. A player's
+starship avatar can be customized by purchasing upgrades.
+
+\item Combat
+
+The player will be able to engage in combat with other entities and
+objects in the universe. Death for one or many parties must be a
+possible outcome of such interactions. Disabling, capture, surrender,
+and other less-than-lethal outcomes of conflict resolution should also
+be supported.
+
+\item Trade
+
+The player must be able to take on a role resembling that of FREE
+TRADERS~\cite{TOUGHGUIDE}. This is one of the more difficult
+requirements to reconcile with other aspects of a universe, as the
+economic, political and technological developments that would lead to
+widespread personal starship ownership are frequently antagonistic to
+trade conducted by such a vessel being a plausible vocation option. In
+particular, it makes a post-scarcity economy borderline impossible.
+
+\item Communication
+
+The player must be able to communicate with other sapients and,
+through these interactions, influence the actions of other entities.
+
+\end{itemize}
+
+\item Scale
+
+Moving beyond the limited confines of a single planet and its moon,
+VSGs will take place in full-scale star systems. 
+
+\item Dynamic Environment, Non-linear and NPC-driven Game play
+
+VSGs must give the player a window into a large universe where events
+and happenstance continuously flow. Empires themselves must be able to
+rise and fall, and even if a player may not see the entire empire at
+once, the player must be able to experience the effects of vast
+political shifts in a universe that dwarfs the current scale of
+humanity by many orders of magnitude. Even if the player does not
+significantly participate in major events, major events will unfold on
+their own as a function of NPC actions.
+
+VSGs allows for players to find their own path, including assessing
+market rates and trading and profiteering as well as using those
+profits to purchase equipment that may help them achieve their
+goals. VSGs will allow free form `sandbox' style exploration even
+where story based campaigns are also supported. Limiting deviation
+from a story based campaign should be enforced by environmental
+factors (e.g. going AWOL on a military campaign should be an option,
+but not without consequence) rather than artificial fettering
+(e.g. you just can't go AWOL because jump points not leading back to
+base mysteriously don't work).
+
+
+\item Multiplayer
+
+VSGs should be designed to support real-time multiplayer
+interactions. The multiplayer actions must be able to influence the
+dynamic playing environment: when enough people are interconnected, they can
+themselves drive the rise and fall of empires even if no single player
+can achieve such a monumental task. While technology may limit the
+density of players to a minority in any given system, players need to
+be able to congregate in sufficient numbers to allow for interesting
+conflicts and engagements.
+
+\item Continued Engine Evolution
+
+Lastly, Vega Strike must be open source with such a license that
+allows anyone to modify the game to suit their own requirements and
+also that allows anyone to sell the game should they need to support a
+costly network arrangement that would benefit all players. The current
+engine is licensed under the GPL which allows for these requirements
+to be fulfilled, but future versions, should the engine be
+rearchitected, may be licensed under the more liberal new BSD license
+to increase interest and adoption. This mode of development makes
+universe-engine co-development more flexible, but also make it more
+difficult to bake in particular assumptions about what will be easy or
+difficult to represent.
+
+\end{itemize}
+
+\ignore{
 The Vega Strike game has a number of requirements that inform the current and
 future evolution of the Vega Strike game engine.  Vega Strike takes place in
 the vast expanses of space that goes beyond a single planet and its moon and
 therefore also beyond the range of standard IEEE 32 bit floating point.
+
 Likewise it must give the player a window into a large universe where events and
 happenstance continuously flows. Empires themselves must be able to rise and
 fall, and even if a player may not see the entire empire at once, the player
 must be able to experience the effects of vast political shifts in a universe
-that dwarfs the experience of humanity by many orders of magnitude. Vega
-Strike allows free form 'sandbox' style exploration even if deviations into a
-story based campaign are also supported. Likewise it allows for players to
+that dwarfs the experience of humanity by many orders of magnitude. 
+
+Vega
+Strike allows free form `sandbox' style exploration even if deviations into a
+story based campaign are also supported. 
+
+Likewise it allows for players to
 find their own path, including assessing market rates and trading and
 profiteering as well as using those profits to purchase equipment that may help
-them achieve their goals. Multiplayer is a critical aspect to the universe as
+them achieve their goals. 
+
+Multiplayer is a critical aspect to the universe as
 when enough people are interconnected, they can themselves drive the rise and
 fall of empires even if no single player can achieve such a monumental
 task. While technology may limit the density of players to a minority in any
 given system, players need to be able to congregate in sufficient numbers to
-allow for interesting conflicts and engagements.  Lastly,  Vega Strike must be
+allow for interesting conflicts and engagements.  
+
+Lastly,  Vega Strike must be
 open source with such a license that allows anyone to modify the game to suit
 their own requirements and also that allows anyone to sell the game should they
 need to support a costly network arrangement that would benefit all players. The
 current engine is licensed under the GPL which allows for these requirements to
 be fulfilled, but future versions, should the engine be rearchitected, may be
 licensed under the more liberal new BSD license to increase interest and adoption.
-
+}
 
 %%%%%%%%%%%%
 %%%%%%%%%%%%
@@ -118,6 +279,21 @@ deliberate scent of popcorn to the requirements the VSU must meet, and
 that necessarily colors the universe that serves it, but that in no
 way keeps us from aspiring to quality, even if we must resign
 ourselves at times to painting soup cans instead of canvas.
+
+\subsubsection{Key implications of game play requirements}
+
+\begin{itemize}
+
+\item Scale + Real-time Multiplayer
+
+Precludes time-dilation. Requires FTL.
+
+\item Economic Scarcity
+
+Precludes/inhibits cheap nano-fabrication of mass-production goods or
+other feasible replicator technologies.
+
+\end{itemize}
 
 \ignore{ Contact with alien species implies FTL. For there to be
 something recognizable as an ``ongoing war'' on an interstellar
@@ -151,7 +327,7 @@ actually going to be looking for in most interactive content set in
 the VSU, at least in terms of player characters. This is because,
 certainly for UtCS and likewise for most other planned tales, we're
 not looking to craft a mythic journey centered on the player
-character. A mythic aspect would be much more appropriate for the {\it
+character. A mythic aspect could be much more appropriate for the ``coming of age'' aspect of the primary story in the {\it
 Rimward of Eden} setting, but even there, restraint is warranted. We
 wish to avoid having the player character become the, witting or
 unwitting, linchpin of all further history. We aim for epic scope in
@@ -209,15 +385,15 @@ Cosmic significance is not necessary for compelling drama or, more
 generally, good stories, drama or otherwise. In
 \emph{Catch-22}~\cite{Catch22}, Yossarian never strikes a deathblow against
 the Nazis. In \emph{All Quiet on the Western
-Front}~\cite{AllQuietOnTheWesternFront} the protagonist accomplishes
-little except surviving only to die, and if that's not a compelling
+Front}~\cite{AllQuietOnTheWesternFront} the protagonist accomplishes precious
+little militarily, and if that's not a compelling
 story for being too far from the SF vein, then ponder \emph{Blade
 Runner}~\cite{BladeRunner} - the world is just as screwed up in the end
 as in the beginning, but one is consumed by the story of even the few
 people (and Replicants - not all interesting characters need be truly
-human) involved. One can credit much of the success of the first
-season, and the relative decline of subsequent seasons, of the new
-Battlestar Galactica series~\cite{NewBattleStar} to the strength that
+human) involved. Another story to consider for inspiration is Iain M. Banks' \emph{Consider Phlebas}~\cite{ConsiderPhlebas} - the backdrop is enormously large, but the protagonists remain on a more modest scale. One can credit much of the success of the first
+season of the new
+Battlestar Galactica series~\cite{NewBattleStar}, and the relative decline of subsequent seasons,  to the strength that
 can come from focusing on human interactions and frailties even in a
 dire and cosmically important situation. In short, it is sufficient
 for the story the protagonist is directly entangled in to be important
@@ -262,24 +438,23 @@ The standard RPG premise wherein the young weakling levels up
 repeatedly until he becomes a veritable force of nature that the
 course of all history depends upon is not a desirable goal. Even the
 more subdued Freelancer~\cite{Freelancer} variant thereof is something
-to be avoided - especially the standard "enemies keep getting more
+to be avoided - especially the standard ``enemies keep getting more
 powerful just to match the player's progress despite the fact that
 this means that later stage enemies could slaughter entire
-civilizations from earlier in the game" and "fate of humanity rests
-upon the player" problems. Privateer~\cite{Privateer} levels of player
+civilizations from earlier in the game'' and ``fate of humanity rests
+upon the player'' problems. Privateer~\cite{Privateer} levels of player
 significance are probably as far as we should consider treading, and,
 where possible for VS, I'd like to move the bulk of the significance
 to before the player takes control of the character. I find it
 preferable to have a character intrinsically with some significance
 and then let the player do with that what they will rather than to
 force a player down a path that will cause them to become
-significant. I think it's much more interesting to have ( as a purely
-hypothetical and unrelated-to-VS example) a scenario where a powerful
-entity decides to spend its time surfing, gambling and sowing its wild
-oats instead of saving the human race because it just didn't feel the
-motivation or didn't want to risk it than to yank the player
+significant. I think it's much more interesting to have (as a purely
+hypothetical and unrelated-to-VS example) a scenario where the player, as a powerful
+entity, decides to spend its time surfing, gambling and sowing its wild
+oats instead of saving the human race because it can't be bothered to care than to yank the player
 incongruously along every time they start to wander down a path that
-doesn't take them toward becoming some "powerful entity". Cosmic
+doesn't take them toward becoming some ``powerful entity''. Cosmic
 significance for an individual is really difficult to not screw up in
 SF. Perhaps it may be less so in a fantasy setting where there are
 easier outlets for suspension of disbelief compatible with the base
@@ -348,7 +523,7 @@ the readers are all able to discern what is occurring several chapters
 ahead of any of the characters, the author is serving the reader
 poorly. Although there may be something to be said for wandering down
 a cliche path and then twisting it at the end to inform the audience
-that you were aware of the cliches - Alan Moore's {\emph
+that you were aware of the cliches - Alan Moore's \emph{
 Watchmen}~\cite{Moore-Watchmen} has some good examples of such twists - 
 you need to really know what you're doing to avoid botching such an
 attempt at deconstruction in an irredeemable fashion. The odds are that
@@ -358,7 +533,7 @@ cleverness accordingly. Equally important to avoiding unnecessary
 idiocy on the part of the characters is to avoid ``genius'' or
 ``flashes of genius'' as the chronic deus ex machina for plot
 resolution( Stargate Atlantis~\cite{StargateAtlantis} I'm talking to
-you here). The Manhattan project wasn't finished in a day, or a week,
+you here). Science by epiphany is farcical. The Manhattan project wasn't finished in a day, or a week,
 or a month, and involved large numbers of painfully brilliant people
 who expanded on existing bodies of work - the atomic bomb was not
 summoned whole from the intellectual aether. As one of multiple people
@@ -369,8 +544,8 @@ infrastructure it tends to take to actually accomplish interesting
 research. 
 
 Hinging a plot on an otherwise perfect plan crafted by keenly
-intelligent planners having a "fatal flaw" that allows "good" to
-triumph over "evil" is just plain old fashioned bad storytelling, and
+intelligent planners having a ``fatal flaw'' that allows `good' to
+triumph over `evil' is just plain old fashioned bad storytelling, and
 magical thinking at that. Let me be clear on this - there is nothing
 good or evil in the VSU, but the thinking of some group therein terms
 it so (my apologies to the Bard).  \emph{Good} and \emph{Evil} of the
@@ -381,7 +556,7 @@ degree possible and appropriate, material set in the VSU should deal
 with the more complicated and more interesting problems of
 adults. There are settings where this will not be entirely the case
 (stories in the Rimward of Eden setting, for instance would be
-reasonable places for "coming of age" themes, even if it's an Aera
+reasonable places for ``coming of age'' themes, even if it's an Aera
 coming of age) but, while some have said that the golden age of SF was
 not the late 1930's to the 1950's but was instead 14, there is nothing that
 prevents us from telling realistically complicated stories in an SF
@@ -442,8 +617,8 @@ the universe. It's a situation ripe for catharsis and, just as
 importantly, for life altering change - it is therefore a good
 starting point for a player to take over a character who already has a
 defined past. They can take the character in rather different
-directions without it breaking all suspension of disbelief, as "he
-cracked" and "you're not the same since XXX" are easily intelligible
+directions without it breaking all suspension of disbelief, as ``he
+cracked'' and ``you're not the same since XXX'' are easily intelligible
 human reactions to tragedy. At the same time, they can use the
 existing past and the benefits and limitations it has bestowed upon
 the character as either guide or leverage - his past gives him skills
@@ -649,10 +824,10 @@ lifeforms. This may seem in some ways too similar a theme to {\em Man
 against circumstance}, as represented by the inter-generational
 baggage of the previous residents of the galaxy, and thus not a good
 choice for focus, but the two are actually distinct. This theme also
-encompases the often unwittingly futile struggle against the laws
+encompasses the often unwittingly futile struggle against the laws
 defining the VSU (i.e. physics and such) that impose their own
 limitations on the desires of the VSU inhabitants. The non-futile
-struggles will be those wherin it is realized that a given path has
+struggles will be those wherein it is realized that a given path has
 been denied by what exists and can exist, but that another avenue
 remains possible.
 
@@ -709,6 +884,6 @@ one makes a lot of sense.
 % LocalWords:  Kardashev UTCS psionics FTL technobabble Skywalker Yossarian Uln
 % LocalWords:  Rimward Aera Andolians Deucalion TWHON Mechanists Klk'k statist
 % LocalWords:  Andolian Purth LIHW Aerans Aeran Rlaan Shmrn Dgn Saahasayaay VSU
-% LocalWords:  Alphans Betans UtCS RPG Replicants Battlestar Moby retconned
+% LocalWords:  Alphans Betans UtCS RPG Replicants Battlestar Moby retconned NPC
 % LocalWords:  Galactica wisenheimers anthrophilic PAIs VSU's Dragonball JRPG
-% LocalWords:  multiplayer
+% LocalWords:  multiplayer whatnots Rousseauism machina Stargate VSGs sapients
