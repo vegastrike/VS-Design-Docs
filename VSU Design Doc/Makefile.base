@@ -1,10 +1,10 @@
 include ./Makefile.common
 
 VSU.pdf VSU.aux: VSU.tex $(NONBIB_DEPS) $(BIB_DEPS)
-	echo '\usepackage{nomencl}' >nomencldef.tex && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS) $(ADDL_TEX_DEPS)" -b "$(BIB_DEPS)" $< && makeindex VSU.glo -s nomencl.ist -o VSU.gls && rm VSU.pdf && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS)" -b "$(BIB_DEPS)" $<
+	@echo '\usepackage{nomencl}' >nomencldef.tex && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS) $(ADDL_TEX_DEPS)" -b "$(BIB_DEPS)" $< && makeindex VSU.glo -s nomencl.ist -o VSU.gls && rm VSU.pdf && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS)" -b "$(BIB_DEPS)" $<
 
 nomencldef.tex:
-	echo '\usepackage{nomencl}' >nomencldef.tex
+	@echo '\usepackage{nomencl}' >nomencldef.tex
 
 
 ## cleaning
