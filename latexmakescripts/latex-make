@@ -15,7 +15,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: latex-make,v 1.22 2008/10/07 23:44:55 jbrown Exp $
+# $Id: latex-make,v 1.23 2009/04/18 01:16:35 jbrown Exp $
 
 use strict;
 use warnings;
@@ -36,16 +36,17 @@ my $Latex = "latex";
 my $Pdflatex = "pdflatex";
 my $Bibtex = "bibtex";
 my $Makeindex = "makeindex";
-my $IgnoreDepRE = qr{^(?:/usr/share/.*|/projects/texlive/.*|/var/lib/texmf/.*|/etc/texmf/.*)$}x;
+my $IgnoreDepRE = qr{^(?:/usr/share/.*|/projects/texlive/.*)$}x;
 
 sub usage() {
   print STDOUT <<EOF;
 usage:
-  $Prog [-p] [-s] [-D] [-d delim] [-b bibdep,] [-t texdep,] <master.tex>
+  $Prog [-B] [-p] [-s] [-D] [-d delim] [-b bibdep,] [-t texdep,] <master.tex>
 
 master.tex -> master.dvi (or master.pdf, with -p)
 
 -b n: enable bibtex, with the given input files declared as dependences
+-B: warn about latex "box" errors, e.g. overfull \\hbox
 -d n: set the filename delimiter used in the dependence lists (default: comma)
 -D: debug mode
 -p: run pdflatex instead of latex
@@ -69,9 +70,10 @@ my $TexDeps = "";
 my $BibtexDeps = "";
 my $DepDelim = ",";
 my $UsePdflatex = 0;
+my $WarnAboutBoxes = 0;
 {
   my %opts;
-  if (!getopts('hsd:b:pt:D', \%opts)) { bad_usage; }
+  if (!getopts('hsd:b:pt:DB', \%opts)) { bad_usage; }
   if (defined($opts{h})) { usage; }
   if (defined($opts{'s'})) { $Silent = 1; }
   if (defined($opts{d})) { $DepDelim = $opts{d}; }
@@ -79,6 +81,7 @@ my $UsePdflatex = 0;
   if (defined($opts{p})) { $UsePdflatex = 1; }
   if (defined($opts{t})) { $TexDeps = $opts{t}; }
   if (defined($opts{D})) { $Debug = 1; }
+  if (defined($opts{B})) { $WarnAboutBoxes = 1; }
 }
 if (@ARGV != 1) { bad_usage; }
 my $MasterTex = shift @ARGV;
@@ -567,7 +570,7 @@ sub run_latex($$) {
     $latex_out = load_textfile($$doc_info{doc_log});
   }
 
-  my $parse_opts = { dump_parsed => 0 };
+  my $parse_opts = { dump_parsed => 0, warn_boxes => $WarnAboutBoxes };
   my $parsed = jTexTools::parse_latex_out($latex_out, $parse_opts);
   my $need_rerun = $$parsed{need_rerun};
 

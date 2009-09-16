@@ -6,7 +6,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: latex-filter,v 1.8 2008/06/28 01:48:56 jbrown Exp $
+# $Id: latex-filter,v 1.9 2009/04/18 07:26:55 jbrown Exp $
 
 use strict;
 use warnings;
@@ -23,11 +23,12 @@ my $Prog = basename($0);
 sub usage() {
   print STDOUT <<EOF;
 usage:
-  $Prog [-b] [-i] [-D]
+  $Prog [-b] [-B] [-i] [-D]
 
 This reads log output from "latex" and outputs a summarized version.
 
 -b: process bibtex instead of latex
+-B: warn about latex "box" errors, e.g. overfull \\hbox
 -i: process makeindex instead of latex
 -D: debug mode: dump parsed output
 EOF
@@ -42,11 +43,13 @@ sub bad_usage() {
 # Command-line parsing
 my $Debug;
 my $Mode = "l";         # which parser to use: "l"atex, "b"ibtex, ...
+my $WarnAboutBoxes = 0;
 {
   my %opts;
-  if (!getopts('bhiD', \%opts)) { bad_usage; }
+  if (!getopts('bBhiD', \%opts)) { bad_usage; }
   if (defined($opts{h})) { usage; }
   if (defined($opts{b})) { $Mode = "b"; }
+  if (defined($opts{B})) { $WarnAboutBoxes = 1; }
   if (defined($opts{i})) { $Mode = "i"; }
   if (defined($opts{D})) { $Debug = 1; }
 }
@@ -64,7 +67,7 @@ if (@ARGV != 0) { bad_usage; }
 
   foreach my $l (@$cmd_out) { chomp $l; }       # edit in-place
   if ($Mode eq "l") {
-    my $filt_opts = { dump_parsed => $Debug };
+    my $filt_opts = { dump_parsed => $Debug, warn_boxes => $WarnAboutBoxes };
     $filt = jTexTools::filter_latex_out($cmd_out, $filt_opts);
   } elsif ($Mode eq "b") {
     my $filt_opts = { dump_parsed => $Debug };

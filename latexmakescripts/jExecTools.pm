@@ -17,6 +17,7 @@ use IO::File;
 sub redirect_stdio($) {
   my ($redirects) = @_;
   if (defined($$redirects{stdin})) {
+    close STDIN;
     open(STDIN, "<", $$redirects{stdin}) or
       confess "couldn't redirect stdin from $$redirects{stdin}: $!";
   }
@@ -26,8 +27,8 @@ sub redirect_stdio($) {
     if (!$result) {
       confess "couldn't redirect stdout to $out_to: $!";
     }
-    open(STDOUT, ">", $$redirects{stdout}) or
-      confess "couldn't redirect stdout to $$redirects{stdout}: $!";
+    #open(STDOUT, ">", $$redirects{stdout}) or
+    #  confess "couldn't redirect stdout to $$redirects{stdout}: $!";
   }
   if (defined(my $err_to = $$redirects{stderr})) {
     my $result = ($err_to eq "stdout") ?

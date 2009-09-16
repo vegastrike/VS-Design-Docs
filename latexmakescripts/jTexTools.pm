@@ -5,7 +5,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: jTexTools.pm,v 1.23 2008/11/14 01:15:00 jbrown Exp $
+# $Id: jTexTools.pm,v 1.29 2009/08/04 00:01:15 jbrown Exp $
 
 package jTexTools;
 
@@ -137,7 +137,11 @@ sub unsplit_latex_out($$) {
 
     # pdftex quirk: sometimes warnings are output with a "! " that looks like
     # the start of a multiline error message, but which isn't.
-    if (($unsplit =~ /^! /) && !($unsplit =~ /^! pdf(?:la)?tex warn/i)) {
+    # also, we won't use this to pass multiline \PackageError{} stuff
+    # through without unsplitting, since they actually seem to obey
+    # the usual unsplitting rules.
+    if (($unsplit =~ /^! /) && !($unsplit =~ /^! pdf(?:la)?tex warn/i)
+        && !($unsplit =~ /^! (?:Package|Class) .* Error:/)) {
       # This line looks like the start of an error message.  latex sometimes
       # outputs multiple lines of detailed info starting at the line
       # following, sometimes with a "l.<number>" toward the end, and ending
@@ -146,14 +150,53 @@ sub unsplit_latex_out($$) {
       # max_print_line-based truncation system.  SIGH.  We'll just pass
       # those lines through for now, at least until we have more info about
       # how they should be unsplit.
-      $in_idx++;
-      ELINE: while (defined(my $trainwreck = $$in[$in_idx])) {
+      ELINE: while (defined(my $trainwreck = $$in[$in_idx + 1])) {
         push @out, $trainwreck;
+        ++$in_idx;
         if ($trainwreck =~ /^\? /) { last ELINE; }
-        $in_idx++;
       }
     }
   }
+
+  # in texlive at least, various packages (e.g. caption3) report routine
+  # info via \PackageInfo which results in output of the form:
+  #   Package caption Info: Unknown document class (or package),
+  #   (caption)             standard defaults will be used...
+  #
+  # There are also \PackageWarning and \PackageError, as well as
+  # variants for classes instead of packages.  (See "lterror.dtx" section
+  # in "source2e.pdf", or "lterror.dtx" itself.)
+  #
+  # Since the parens confuse the filename parser, and since these are
+  # conceptually just long single messages, we'll treat them as continued
+  # lines and un-split them.  We're doing this with an inefficient seperate
+  # pass, since the normal tex long-line-splitting is also done.  The
+  # (packagename) prefixing isn't done at that splitting, but apparently
+  # only at \MessageBreak.
+  LINE: for (my $scan_idx = 0; $scan_idx < @out; $scan_idx++) {
+    my $line = $out[$scan_idx];
+    my $targ_line_idx = $scan_idx;
+    if ($line =~ m{^(?:(?:Package|Class)\ (.*)\ (?:Info|Warning)|
+                       !\ (?:Package|Class)\ (.*)\ Error):}xi) {
+      my $is_err = (defined($2)) ? 1 : 0;
+      my $pkg_name = ($is_err) ? $2 : $1;
+    PKG_LINE:
+      while (defined(my $pkg_maybe = $out[$scan_idx + 1])) {
+        if ($pkg_maybe =~ m{^\($pkg_name\)\s+(\S.*)?$}) {
+          my $pkg_cont = $1;
+          # append continuation text onto the first line of this warning/etc,
+          # and then replace the source line with a blank (instead of
+          # shifting the rest of @out or re-copying it)
+          $out[$targ_line_idx] .= " " . $pkg_cont;
+          $out[$scan_idx + 1] = "";
+          ++$scan_idx;
+        } else {
+          last PKG_LINE;
+        }
+      }
+    }
+  }
+
   return \@out;
 }
 
@@ -269,7 +312,8 @@ sub parse_latex_out($$) {
     my $skip_namestack = 0;;
     if ($line =~ m{^(?:\((?:Font|hyperref)\)|
                      (?:Transcript|Output)\ written\ on|
-                     See\ the\ LaTeX)}xi) {
+                     See\ the\ LaTeX|
+                     Package:)}xi) {
       if ($line =~ /^Output written on (.*) \((\d+) pages?, \d+ bytes?\)/) {
         $$result{n_pages} = $2;
       }
@@ -279,6 +323,11 @@ sub parse_latex_out($$) {
                         \\end\ occurred\ inside\ a\ group
                        )}xi) {
       # something interesting which looks like filename info, but isn't
+      $skip_namestack = 1;
+    } elsif (($line =~ m{^(?:!\ )?(?:Package|Class)
+                         \ .*\ (?:Info|Warning|Error):}xi)) {
+      # these are unsplit in unsplit_latex_out(), and are full of spammy
+      # parens
       $skip_namestack = 1;
     }
 
@@ -312,6 +361,9 @@ sub parse_latex_out($$) {
           last EBODY;
         } elsif ($next =~ /^l\.(\d+)(?: (.+))?/) {
           ($lnum, $detail) = ($1, $2);
+          if (defined($detail) && ($detail =~ /^h for help\?/)) {
+            $detail = undef;            # useless
+          }
         } else {
           push @ml_body, $next;         # multi-line error message body
         }
@@ -395,16 +447,38 @@ if ($warn =~ /input lines/) { die "got a warning with a range of lines, at last;
       my $fname = $1;
       $fname = trim_fname($fname);
       $$result{in_files}->insert($fname);
+
     } elsif ($line =~ /^\((\\end occurred inside a group.*)\)\s*$/i) {
       my $msg = $1;
       $out_type = REPORT_ERR;
       $out_txt = "$file: error: $msg";
+
     } elsif ($line =~ /^Runaway argument/i) {
       my $next = $$in[$in_idx + 1];
       if (defined($next) && ($next =~ /^\s*[({<]/)) {
         # gobble up next line, to keep from confusing filename parser.  sigh.
         $in_idx++;
       }
+
+    } elsif ($line =~ m{^(?:Package|Class)\ .*\ Warning:
+                        \ (.*?)(?:\ on\ input\ line\ (\d+)\.)?$}xi) {
+      my ($warn, $lnum) = ($1, $2);
+      $out_type = REPORT_WARN;
+      $out_txt = "$file:" . (defined($lnum) ? "$lnum:" : "") .
+        " warning: $warn";
+
+    } elsif ($$opts{warn_boxes} &&
+             ($line =~ m{^(Under|Over)full\ \\(h|v)box\ (.*)$}xi)) {
+      my ($sense, $h_or_v, $detail) = ($1, $2, $3);
+      my $lnum;
+      if ($detail =~ /at lines (\d+)--(\d+)/) {
+        $lnum = $1;
+      } elsif ($detail =~ /at line (\d+)/) {
+        $lnum = $1;
+      }
+      $out_type = REPORT_WARN;
+      $out_txt = "$file:" . (defined($lnum) ? "$lnum:" : "") .
+        " warning: $line";
     }
 
     if (defined($out_type)) {
