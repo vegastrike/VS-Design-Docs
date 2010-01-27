@@ -5,7 +5,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: jTexTools.pm,v 1.29 2009/08/04 00:01:15 jbrown Exp $
+# $Id: jTexTools.pm,v 1.32 2010/01/27 23:07:32 jbrown Exp $
 
 package jTexTools;
 
@@ -53,7 +53,11 @@ sub _dp($) {
 # trim off leading "./" if present
 sub trim_fname($) {
   my ($fname) = @_;
-  return (dirname($fname) eq ".") ? basename($fname) : $fname;
+  my $result = $fname;
+  while (substr($result, 0, 2) eq "./") {
+    $result = substr($result, 2);
+  }
+  return $result;
 }
 
 
@@ -213,7 +217,9 @@ sub _update_filename_stack($$$) {
     if ($fname =~ m{^(?:use\ |
                       .*,\ id=\d+,\ |
                       .*\ \d+(\.\d+)?pt,\ |
-                      see\ the\ transcript\ file
+                      see\ the\ transcript\ file|
+                      to\ be\ read\ again|
+                      1in=72
                      )}xi) {
       # oi, this isn't a filename, just more spam (likely from pdftex)
       if (pos($line) < length($line)) {
