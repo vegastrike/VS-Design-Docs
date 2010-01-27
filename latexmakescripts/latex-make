@@ -15,7 +15,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: latex-make,v 1.23 2009/04/18 01:16:35 jbrown Exp $
+# $Id: latex-make,v 1.28 2010/01/27 20:02:05 jbrown Exp $
 
 use strict;
 use warnings;
@@ -36,7 +36,18 @@ my $Latex = "latex";
 my $Pdflatex = "pdflatex";
 my $Bibtex = "bibtex";
 my $Makeindex = "makeindex";
-my $IgnoreDepRE = qr{^(?:/usr/share/.*|/projects/texlive/.*)$}x;
+
+# Paths to ignore when warning about undeclared dependences discovered after
+# running latex.  These are regular expressions, implicitly anchored at
+# the start and end.
+my @IgnoreDepPaths =
+  ( "/usr/share/.*", "/projects/texlive/.*", "/opt/local/share/.*" );
+
+# If this file exists, its contents will be added to @IgnoreDepPaths, one
+# path regex per line.  (Leading and trailing whitespace will be
+# trimmed, as will comment lines beginning with "#".)
+my $IgnoreDepFile = ".latex-make-ignoredeps";
+
 
 sub usage() {
   print STDOUT <<EOF;
@@ -88,6 +99,7 @@ my $MasterTex = shift @ARGV;
 if (defined(my $makeflags = $ENV{MAKEFLAGS})) {
   if ($makeflags =~ /^\S*s/) { $Silent = 1; }
 }
+my $IgnoreDepRE;
 
 
 use constant {
@@ -188,6 +200,33 @@ sub load_textfile($) {
 }
 
 
+# Combine a list of paths to ignore, plus any additional paths read from a
+# file, into a big regex that matches them.  Returns a qr//'d regex
+sub gen_ignore_re($$) {
+  my ($initial_path_list, $file_to_read) = @_;
+  my $func = "gen_ignore_re";
+  my @ignore_paths = @$initial_path_list;
+
+  if (-e $file_to_read) {
+    dprint "$func: loading regexes from \"$file_to_read\"";
+    my $r_lines = load_textfile($file_to_read);         # lazy
+    foreach my $line (@$r_lines) {
+      if ($line =~ /^\s*(#.*)$/) {      # comment
+      } elsif ($line =~ /^\s*(\S(.*\S)?)\s*$/) {
+        push @ignore_paths, $1;
+      }
+    }
+  }
+
+  dprint "$func: using ignore path regexes: " . join(" ", @ignore_paths);
+
+  my $regex = "^(?:" . join("|", map { "(?:" . $_ . ")" } @ignore_paths) .
+    ")\$";
+  my $result = qr/$regex/;
+  return $result;
+}
+
+
 # Generate a function which will restore the mtime of a file, if its
 # contents appear unchanged since it was created.
 #
@@ -232,7 +271,9 @@ sub gen_mtime_undoer($) {
 #   doc_tex: user-provided path to tex file
 #   doc_base: filename component of tex file, sans ".tex"
 #   doc_log: path to "log" file, latex log -- subtly different from stdout
-#   doc_aux: path to "aux" file (references, etc.)
+#   doc_aux: path to main "aux" file, doc_base.aux (may \@input other auxes)
+#   doc_auxes: jSet of paths to all possible "aux" files (references, etc.)
+#     These don't always exist, and are treated specially to break dep cycles
 #   doc_bbl: path to "bbl" file, bibtex output
 #   doc_blg: path to "blg" file, bibtex log
 #   doc_dvi: path to output DVI file (or PDF, for PDFlatex)
@@ -242,8 +283,12 @@ sub gen_mtime_undoer($) {
 #   doc_idx: path to "idx" file, auto-generated index terms from latex
 #   doc_ind: path to "ind" file, makeindex output
 #   doc_ilg: path to "ilg" file, makeindex log on .idx file
+#   doc_out: path to "out" file, pdflatex hyperref outline file.  Treated
+#     similar to doc_aux and doc_idx (iff use_outline is set)
 #   use_bibtex: flag
+#   use_pdflatex: flag
 #   use_makeindex: flag; starts out 0, is auto-detected
+#   use_outline: flag, using pdflatex outline file (doc_out), auto-detected
 #   bibtex_deps: set of bibtex input deps (bib, bst, ...)
 #   tex_deps: set of other files that top-level paper depends on;
 #     these files MUST be present (figures, etc.)
@@ -279,12 +324,14 @@ sub init_doc_info($$$) {
     die "input name '$master_tex' doesn't end in .tex";
   }
 
-  foreach my $ext (qw{log aux bbl blg dvi idx ind ilg}) {
+  foreach my $ext (qw{log aux bbl blg dvi idx ind ilg out}) {
     $$di{"doc_$ext"} = "$$di{doc_base}.$ext";
   }
+  $$di{use_pdflatex} = ($UsePdflatex) ? 1 : 0;
   if ($UsePdflatex) {
     $$di{doc_dvi} = "$$di{doc_base}.pdf";
   }
+  $$di{doc_auxes} = new_from_list jSet($$di{doc_aux});
   $$di{doc_tocs} = new jSet();
   $$di{doc_tocs_maybe} = new_from_list
       jSet(map { "$$di{doc_base}.$_" } qw{toc lof lot});
@@ -299,14 +346,37 @@ sub init_doc_info($$$) {
   $$di{use_bibtex} = ($$di{bibtex_deps}->empty()) ? 0 : 1;
 
   $$di{use_makeindex} = 0;
+  $$di{use_outline} = 0;
 
+  $$di{tex_deps} = new jSet();
   foreach my $other_dep (@$other_dep_list) {
-    if (! -e $other_dep) {
-      die "missing other explicit dep: '$other_dep'";
+    my $dep_name = jTexTools::trim_fname($other_dep);
+    my $aux_for_this_dep;
+    if ($dep_name =~ /\.aux$/i) {
+      # Set aside any additional aux-files specified, since we treat those
+      # specially, and don't require that they actually exist.
+      $aux_for_this_dep = $dep_name;
+      dprint "using additional explicit aux-file '$dep_name'";
+    } else {
+      if (! -e $dep_name) {
+        die "missing other explicit dep: '$dep_name'";
+      }
+      $$di{tex_deps}->insert($dep_name);
+      if ($dep_name =~ /(.*)\.tex$/i) {
+        $aux_for_this_dep = $1 . ".aux";
+        dprint "implying possible additional aux-file '$aux_for_this_dep'";
+      }
+    }
+    if (defined($aux_for_this_dep)) {
+      # (I'd like to auto-detect aux-files based on the "in_files" set parsed
+      # from latex output, but then we'd have no reliable way to detect them
+      # initially.  We could cheese out and use "*.aux", or perhaps just
+      # handwave and say "only latex should ever write to aux files, so we'd
+      # catch it in the latex-make invocation which updated it" -- but the
+      # latter is fragile in the face of errors or ^C.
+      $$di{doc_auxes}->insert($aux_for_this_dep);
     }
   }
-  $$di{tex_deps} = new_from_list jSet(map { jTexTools::trim_fname($_) }
-                                      @$other_dep_list);
 
   $$di{stale} = new jSet();
   $$di{lastrun_latex} = undef;
@@ -335,6 +405,13 @@ sub discover_optional_files($$) {
     $$di{use_makeindex} = 1;
     if ($flag_targs_stale) {
       $$di{stale}->insert($$di{doc_ind});
+    }
+  }
+  if ($$di{use_pdflatex} && !$$di{use_outline} && (-e $$di{doc_out})) {
+    dprint "discovered outline file '$$di{doc_out}'";
+    $$di{use_outline} = 1;
+    if ($flag_targs_stale) {
+      $$di{stale}->insert($$di{doc_dvi});
     }
   }
 }
@@ -381,7 +458,7 @@ sub should_run_common($$$$) {
       &$ldp("$func: targ $targ is marked stale");
       $stale_targ = 1;
     } elsif ($ignore_targ_mtime->test($targ)) {
-      &$ldp("$func: ignoring mtime on targ $targ");
+      &$ldp("$func: ignoring target mtime on $targ");
     } else {
       my $mtime = get_mtime($targ);
       &$ldp("$func: targ $targ mtime $mtime");
@@ -432,8 +509,9 @@ sub should_run_latex($$) {
 
   # "soft" dependences (things we care about if they're present, but which
   # we'll deal with through other means if they're absent)
-  my $soft_deps = new_from_list jSet($$di{doc_aux}, $$di{doc_bbl},
-                                     $$di{doc_ind});
+  my $soft_deps = new_from_list jSet($$di{doc_bbl}, $$di{doc_ind});
+  if ($$di{use_outline}) { $soft_deps->insert($$di{doc_out}); }
+  $soft_deps->union($$di{doc_auxes});
   $soft_deps->union($$di{doc_tocs});
 
   # insert soft_deps which currently exist, into src_deps
@@ -443,28 +521,41 @@ sub should_run_latex($$) {
   $in_deps_ret->union($src_deps);
   $in_deps_ret->union($soft_deps);      # includes even missing files
 
-  my $targs = new_from_list jSet($$di{doc_aux}, $$di{doc_dvi});
-  $targs->union($$di{doc_tocs});
+  my $targs = new_from_list jSet($$di{doc_dvi});
+  # Only consider auxes which already exist as targets, since we're not 100%
+  # guaranteed that latex will create each of them when it runs.  If it
+  # misses one that's needed by e.g. bibtex, we'll get an error then; if it
+  # creates one later, we'll notice it in run_latex() and re-run.
+  $targs->insert(grep { -e $_ } $$di{doc_auxes}->list_all());
+  $targs->union($$di{doc_tocs});        # may be empty
   if ($$di{use_makeindex}) { $targs->insert($$di{doc_idx}); }
+  if ($$di{use_outline}) { $targs->insert($$di{doc_out}); }
 
-  # Special cases: ignore the stale-ness of aux, since the latex run is the
-  # sole way to produce a newer copy.  Ignore a stale bbl if the aux is also
+  # Special cases: ignore the stale-ness of auxes, since the latex run is the
+  # sole way to produce a newer copy.  Ignore a stale bbl if any aux is
   # stale, since we know the stale aux will cause the bbl to be regenerated.
   my $local_stale = $$di{stale}->copy();
-  if ($local_stale->test($$di{doc_bbl}) && $local_stale->test($$di{doc_aux})) {
-    $local_stale->erase($$di{doc_bbl});
+  foreach my $aux ($$di{doc_auxes}->list_all()) {
+    if ($local_stale->test($aux)) {
+      $local_stale->erase($$di{doc_bbl});
+      last;
+    }
   }
-  $local_stale->erase($$di{doc_aux});
+  $local_stale->subtract($$di{doc_auxes});
+
   # ignore staleness of other files latex regenerates authoritatively
   $local_stale->subtract($$di{doc_tocs});
   if ($$di{use_makeindex}) { $local_stale->erase($$di{doc_ind}); }
+  if ($$di{use_outline}) { $local_stale->erase($$di{doc_out}); }
 
   # ignore mtime (for "is target stale?" purposes) of latex output files which
   # will have their mtimes reset after run, if they are unchanged.  otherwise,
   # we'd loop forever.
-  my $ignore_targ_mtime = new_from_list jSet($$di{doc_aux});
+  my $ignore_targ_mtime = new_from_list jSet($$di{doc_out});
+  $ignore_targ_mtime->union($$di{doc_auxes});
   $ignore_targ_mtime->union($$di{doc_tocs});
   if ($$di{use_makeindex}) { $ignore_targ_mtime->insert($$di{doc_idx}); }
+  if ($$di{use_outline}) { $ignore_targ_mtime->insert($$di{doc_out}); }
 
   my $result = should_run_common($src_deps, $targs, $local_stale,
                                  $ignore_targ_mtime);
@@ -486,7 +577,8 @@ sub should_run_bibtex($$) {
 
   if (!$$di{use_bibtex}) { return SHOULD_NO; }
 
-  my $src_deps = new_from_list jSet($$di{doc_aux});
+  my $src_deps = new_from_list jSet();
+  $src_deps->union($$di{doc_auxes});
   $src_deps->union($$di{bibtex_deps});
 
   $in_deps_ret->clear();
@@ -531,21 +623,29 @@ sub should_run_makeindex($$) {
 
 # run latex once, return object with info about that run.
 #
-# if "<document>.aux" existed beforehand as its contents are unchanged by
-# this run, then reset the mtime on that file after running.
+# if "<document>.aux" (or other detected aux-files) existed beforehand and its
+# contents are unchanged by this run, then reset the mtime on those file after
+# running.
 sub run_latex($$) {
   my ($doc_info, $opts) = @_;
+  my $func = "run_latex";
   if (!defined($opts)) { $opts = {}; }
   my @latex_cmd;
   push @latex_cmd, (($UsePdflatex) ? $Pdflatex : $Latex);
   push @latex_cmd, $$doc_info{doc_tex};
 
-  my $aux = $$doc_info{doc_aux};
-  my $aux_undoer = (-e $aux) ? gen_mtime_undoer($aux) : undef;
-  my @toc_undoers = map { (-e $_) ? [ $_, gen_mtime_undoer($_)] : undef
-                            } $$doc_info{doc_tocs}->list_all();
+  my %aux_undoers;
+  foreach my $aux ($$doc_info{doc_auxes}->list_all()) {
+    $aux_undoers{$aux} = (-e $aux) ? gen_mtime_undoer($aux) : undef;
+  }
+  my %toc_undoers;
+  foreach my $toc ($$doc_info{doc_tocs}->list_all()) {
+    $toc_undoers{$toc} = (-e $toc) ? gen_mtime_undoer($toc) : undef;
+  }
   my $idx_undoer = ($$doc_info{use_makeindex} && (-e $$doc_info{doc_idx}))
-      ? gen_mtime_undoer($$doc_info{doc_idx}) : undef;
+    ? gen_mtime_undoer($$doc_info{doc_idx}) : undef;
+  my $outline_undoer = ($$doc_info{use_outline} && (-e $$doc_info{doc_out}))
+    ? gen_mtime_undoer($$doc_info{doc_out}) : undef;
 
   if (!$Silent) {
     print join(" ", @latex_cmd) . "\n";
@@ -574,24 +674,36 @@ sub run_latex($$) {
   my $parsed = jTexTools::parse_latex_out($latex_out, $parse_opts);
   my $need_rerun = $$parsed{need_rerun};
 
-  my $aux_unchanged = 0;
-  if (defined($aux_undoer)) { $aux_unchanged = &$aux_undoer(); }
+  my $auxes_unchanged = 1;
+  foreach my $aux (keys %aux_undoers) {
+    my $undoer = $aux_undoers{$aux};
+    if (defined($undoer) && !&$undoer()) {
+      $auxes_unchanged = 0;     # aux file contents changed
+    }
+    if (!defined($undoer) && (-e $aux)) {
+      $auxes_unchanged = 0;     # newly created aux file
+    }
+  }
+
   my $idx_unchanged = 0;
   if (defined($idx_undoer)) { $idx_unchanged = &$idx_undoer(); }
 
-  foreach my $toc_undo (@toc_undoers) {
+  if (defined($outline_undoer)) {
+    if (!&$outline_undoer()) {
+      $need_rerun = 1;          # outline file changed; force re-run
+    }
+  }
+
+  foreach my $toc (keys %toc_undoers) {
     # reset table-of-contents mtimes, if contents are unchanged
-    if ($toc_undo) {
-      my ($fname, $undoer) = @$toc_undo;
-      if (!&$undoer()) {
-        # t-o-c file contents changed; force re-run
-        $need_rerun = 1;
-      }
+    my $undoer = $toc_undoers{$toc};
+    if (defined($undoer) && !&$undoer()) {
+      $need_rerun = 1;          # t-o-c file contents changed; force re-run
     }
   }
 
   return { latex_stat => $latex_stat,
-           aux_unchanged => $aux_unchanged,
+           auxes_unchanged => $auxes_unchanged,
            need_rerun => $need_rerun,
            parsed => $parsed };
 }
@@ -791,7 +903,7 @@ sub postproc_latex_run($$$) {
     }
   }
 
-  my @targs = ($$doc_info{doc_aux}, $$doc_info{doc_dvi},
+  my @targs = ($$doc_info{doc_auxes}, $$doc_info{doc_dvi},
                $$doc_info{doc_tocs}->list_all());
   if ($outcome == RUN_FINAL) {
     $$doc_info{stale}->erase(@targs);
@@ -799,7 +911,7 @@ sub postproc_latex_run($$$) {
     $$doc_info{stale}->insert(@targs);
   }
 
-  if ($$doc_info{use_bibtex} && !$$run_info{aux_unchanged}) {
+  if ($$doc_info{use_bibtex} && !$$run_info{auxes_unchanged}) {
     # flag the bbl file as outdated, since we know we've monkeyed with the
     # aux-file.  we can't just rely on file mtime, since we may have done a
     # latex-bibtex-latex sequence within the same second.  (we shouldn't just
@@ -941,10 +1053,13 @@ sub sig_cleanup($$) {
 
 
 sub toplev() {
+  $IgnoreDepRE = gen_ignore_re(\@IgnoreDepPaths, $IgnoreDepFile);
+
   my $doc_info;
   {
-    my @bib_deps = split($DepDelim, $BibtexDeps);
-    my @tex_deps = split($DepDelim, $TexDeps);
+    # filter out empty or whitespace-only names: makes live easier for Make
+    my @bib_deps = grep {!/^\s*$/} split($DepDelim, $BibtexDeps);
+    my @tex_deps = grep {!/^\s*$/} split($DepDelim, $TexDeps);
     $doc_info = init_doc_info($MasterTex, \@bib_deps, \@tex_deps);
     $SIG{INT} = $SIG{TERM} = $SIG{HUP} = sub {
       sig_cleanup($_[0], $doc_info);
