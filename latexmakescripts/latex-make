@@ -15,7 +15,7 @@
 # the GNU General Public License.
 #
 # JAB
-# $Id: latex-make,v 1.28 2010/01/27 20:02:05 jbrown Exp $
+# $Id: latex-make,v 1.29 2010/01/28 01:20:48 jbrown Exp $
 
 use strict;
 use warnings;
@@ -577,8 +577,8 @@ sub should_run_bibtex($$) {
 
   if (!$$di{use_bibtex}) { return SHOULD_NO; }
 
-  my $src_deps = new_from_list jSet();
-  $src_deps->union($$di{doc_auxes});
+  my $src_deps = new_from_list jSet($$di{doc_aux});
+  $src_deps->insert(grep { -e $_ } $$di{doc_auxes}->list_all());
   $src_deps->union($$di{bibtex_deps});
 
   $in_deps_ret->clear();
@@ -702,6 +702,8 @@ sub run_latex($$) {
     }
   }
 
+  dprint "$func: latex_stat $latex_stat auxes_unchanged $auxes_unchanged " .
+    "need_rerun $need_rerun";
   return { latex_stat => $latex_stat,
            auxes_unchanged => $auxes_unchanged,
            need_rerun => $need_rerun,
@@ -750,6 +752,7 @@ sub run_bibtex($$) {
   }
   #if (defined($bbl_undoer)) { $bbl_unchanged = &$bbl_undoer(); }
 
+  dprint "$func: bibtex_stat $bibtex_stat bbl_unchanged $bbl_unchanged";
   return { bibtex_stat => $bibtex_stat,
            bbl_unchanged => $bbl_unchanged,
            parsed => $parsed };
@@ -791,6 +794,7 @@ sub run_makeindex($$) {
     $ind_unchanged = 1;
   }
 
+  dprint "$func: makeindex_stat $cmd_stat ind_unchanged $ind_unchanged";
   return { makeindex_stat => $cmd_stat,
            ind_unchanged => $ind_unchanged,
            parsed => $parsed };
@@ -903,7 +907,8 @@ sub postproc_latex_run($$$) {
     }
   }
 
-  my @targs = ($$doc_info{doc_auxes}, $$doc_info{doc_dvi},
+  my @targs = ($$doc_info{doc_dvi}, 
+               grep { -e $_ } $$doc_info{doc_auxes}->list_all(),
                $$doc_info{doc_tocs}->list_all());
   if ($outcome == RUN_FINAL) {
     $$doc_info{stale}->erase(@targs);
