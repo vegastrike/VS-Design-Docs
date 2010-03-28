@@ -1,0 +1,14 @@
+include ./Makefile.common
+
+ColdestSea.pdf ColdestSea.aux: ColdestSea.tex $(NONBIB_DEPS) $(BIB_DEPS)
+	@echo '\usepackage{nomencl}' >nomencldef.tex && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS) $(ADDL_TEX_DEPS)" -b "$(BIB_DEPS)" $< && makeindex ColdestSea.glo -s nomencl.ist -o ColdestSea.gls && rm ColdestSea.pdf && $(LMAKE) -p -d " " -t "$(NONBIB_DEPS)" -b "$(BIB_DEPS)" $<
+
+nomencldef.tex:
+	@echo '\usepackage{nomencl}' >nomencldef.tex
+
+
+## cleaning
+clean:
+	-rm -f *.pdf *.toc *.lof *.lot *.aux *.bbl *.d *.log *.out *.blg *.idx *.ilg *.ind *.glg *.gls *.glo
+
+

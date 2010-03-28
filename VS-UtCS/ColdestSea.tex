@@ -1,0 +1,137 @@
+\input{texheader}
+\begin{document}
+\title{Vega Strike: Upon the Coldest Sea \\ Game Design Document}
+
+\author{Ed. JS}
+
+\renewcommand{\thepage}{\roman{page}}
+\maketitle
+\renewcommand{\thepage}{\arabic{page}}
+\thispagestyle{empty}
+\centerline{\bf {\Huge Acknowledgements:}}
+~\newline
+\input{acknowledgements}
+\clearpage
+\thispagestyle{empty}
+\centerline{\bf {\Huge Revision History:}}
+~\newline
+\input{revisionHistory}
+\clearpage
+\setcounter{tocdepth}{2}
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{\emph{Table of Contents}}
+\tableofcontents
+\listoftables
+\addcontentsline{toc}{chapter}{\emph{List of Tables}}
+\listoffigures
+\addcontentsline{toc}{chapter}{\emph{List of Figures}}
+%\chapter*{Preface}
+%\addcontentsline{toc}{chapter}{Preface}
+%\input{preface}
+
+\chapter{Game Overview}
+\input{overview}
+
+\chapter{Gameplay Mechanics}
+\input{GameplayMechanics}
+
+\chapter{Setting, Story, and Characters}
+\input{SettingAndCharacters}
+
+\chapter{Divisions of Action}
+\input{DOAs}
+
+\chapter{Flight Interface}
+\input{FlightInterface}
+
+\chapter{Base Interface}
+\input{BaseInterface}
+
+\chapter{AI}
+\input{AI}
+
+\chapter{Technical Considerations}
+\input{Technical}
+
+\chapter{Art}
+\input{Art}
+
+\chapter{Tools}
+\input{Tools}
+
+\chapter{Management}
+\input{Management}
+
+%DUMMY INDEX ENTRIES
+\index{DUMMY ENTRY}
+%\index{cheese}
+%\index{cheese!gouda}
+%\index{cheese!gouda!goat gouda}
+%\index{cheese!stilton!blue stilton}
+%\index{cheese!stilton!white stilton}
+%\index{cheese|see{crackers}} 
+%\index{crackers}
+%\index{Fakecheese@\textit{Fakecheese}}
+%\index{cheese@(cheese)!Blue Cheese} % makes (cheese)appear as if spelled ``cheese''
+
+% Set up appendix alpha-numbering
+\chapter*{APPENDICES}
+\addcontentsline{toc}{chapter}{APPENDICES}
+\newcounter{appendixcounter}
+\setcounter{appendixcounter}{0}
+\renewcommand{\thechapter}{\Alph{appendixcounter}}
+\renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+\renewcommand{\thetable}{\thechapter-\arabic{table}}
+\clearpage
+
+\stepcounter{appendixcounter}
+\refstepcounter{chapter}
+\section*{Appendix \Alph{appendixcounter}: Asset List}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: Asset List}
+\input{appendixA}
+
+\clearpage
+\stepcounter{appendixcounter}
+\refstepcounter{chapter}
+\section*{Appendix \Alph{appendixcounter}: NAME OF APPENDIX}
+\addcontentsline{toc}{chapter}{Appendix \Alph{appendixcounter}: NAME OF APPENDIX}
+\input{appendixB}
+
+{
+\small
+\bibliographystyle{abbrv}
+\small
+\cleardoublepage
+\renewcommand\bibname{References}
+\renewcommand{\thechapter}{References}
+\refstepcounter{chapter}
+\phantomsection
+\addcontentsline{toc}{chapter}{References}
+\label{References:References}
+\bibliography{biblio}
+}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{Glossary}
+\input{glossarydefs}
+\renewcommand{\thechapter}{Glossary}
+\refstepcounter{chapter}
+\label{Glossary:Glossary}
+\printglossary
+
+
+\clearpage
+\phantomsection
+\renewcommand{\thechapter}{Index}
+\refstepcounter{chapter}
+\label{Index:Index}
+\addcontentsline{toc}{chapter}{Index}
+\printindex
+
+
+\end{document}
+
+
+% LocalWords:  JS UtCS
