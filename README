@@ -1,3 +1,5 @@
 The "images" and "latexmakescripts" directories should be shared for all documents.
 Each document should go in its own directory
 
+
+
