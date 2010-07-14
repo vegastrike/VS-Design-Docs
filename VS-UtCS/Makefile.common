@@ -1,6 +1,6 @@
 ## build rules
 
-TEX_DEPS = texheader.tex acknowledgements.tex revisionHistory.tex prettygloss.tex remark.tex appendixA.tex appendixB.tex glossarydefs.tex overview.tex nomencldef.tex SettingAndCharacters.tex GameplayMechanics.tex DOAs.tex FlightInterface.tex BaseInterface.tex AI.tex Technical.tex Art.tex Tools.tex Management.tex
+TEX_DEPS = texheader.tex acknowledgements.tex revisionHistory.tex prettygloss.tex remark.tex appendixA.tex appendixB.tex glossarydefs.tex overview.tex nomencldef.tex SettingAndCharacters.tex GameplayMechanics.tex DOAs.tex FlightInterface.tex BaseInterface.tex AI.tex Technical.tex Art.tex Tools.tex Management.tex macros.tex
 
 FIG_DEPS = 
 
