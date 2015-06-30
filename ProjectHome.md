@@ -1,0 +1,1 @@
+Design documentation for the Vega Strike Engine, Game, and Universe. Contains source LaTeX, images, and associated Perl build scripts for developing documentation for the Vega Strike Engine, Vega Strike Game(s), and Vega Strike Universe.
