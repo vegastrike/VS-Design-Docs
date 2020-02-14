@@ -1,0 +1,2 @@
+This list is src/python/star_system_exports.h (the list of all VS.* functions), and their argument lists exist in faction_generic.h at the bottom as well as universe_util.h
+http://wcjunction.com/phpBB2/viewtopic.php?t=409

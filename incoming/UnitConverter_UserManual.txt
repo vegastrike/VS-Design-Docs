@@ -1,0 +1,90 @@
+=Introduction=
+
+Raising from the stone age of workflows, in which every task, from texture conversion to editing of unit stats, had to be accomplished manually and only by quite knowledgeable magistrates who new the alchemy of units.csv columns, xmesh files, and had a magic with meshers. Now, UnitConverter shines upon us, still in the distance, but unmovable like a beacon on solid rock, to be the church of the artists, to accommodate the apostles of Blender, CineMut, and LaGrande, to bring the holy spirit of salvation to this compassionate universe of ours.
+
+=UnitConverter Tool=
+
+==Requirements, Installation and Starting==
+
+The only requirement to run UnitConverter on your system is to have Python 2.5 installed on your system. No additional libraries are required.
+
+You can download the latest version of UnitConverter from the Vega Strike svn repository [http://vegastrike.svn.sourceforge.net/viewvc/vegastrike/trunk/modtools/UnitConverter/ trunk/modtools/UnitConverter].
+
+To install, copy all files to a directory of your choice.
+
+To run UnitConverter, open command line/shell, change to the installation directory, and depending your operating system type (without the ">" which denotes the command line prompt:
+
+Windows: <code><pre>> uc</pre></code>
+
+Linux: <code><pre>> ./uc</pre></code>
+
+Other: <code><pre>> python unitconverter.py</pre></code>
+
+First thing you'll need to do is to configure the paths for Vega Strike data directory, mesher and nvcompress. See section [[Development:Tools:UnitConverter#Configuration|Configuration]] on this page for details.
+
+{{warning_text |
+| text='''Important:''' To be fully able utilize UnitConverter functionality, set the paths under [[Development:Tools:UnitConverter#Configuration|Configure]].}}
+
+To compress master textures and HUD images to DDS, you will require nVidia's Texture Tools. See [[Links:Graphic_Applications#nVidia_Texture_Tools|Graphic Applications > Converters]] on obtaining the tools.
+
+In order to convert models you will need Vega Strike's mesher tool which usually comes with Vega Strike.
+
+And of course, you will need Vega Strike (or any VS mod) data set available on your hard drive.
+
+==Common Elements==
+
+The Graphical User Interface (GUI) of the Unit Converter consists of some common components:
+* Vertical Menu bar (blue background) on the left side with buttons to switch between the various screens
+* Instructions (light blue background) as quick reference for intuitive users on top of each screen.
+* Section headers (magenta background) to separate various independent functions.
+* Blue Buttons (blue background) that interact with files on your disc.
+* White Buttons (white background) for interaction with displayed data.
+* Option drop downs for selection of presets.
+* Text input fields to change data manually.
+
+==Models Workspace==
+Models Workspace Screen:
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10624&g2_serialNumber=2&ext=.jpg
+
+Here you can add unit models, shield meshes, and helper objects for placement of subunits, turrets, engine glow, weapon mounts, and docking ports.
+* '''Add Model''' - Adds an OBJ file model to a workspace. Point to an OBJ file and open it.
+* '''Remove Model''' - Removes a model from workspace
+* '''Clear Workspace''' - Makes a new empty workspace from which you can start from scratch.
+
+An MTL file is not required anymore as it will be created by UnitConverter.
+
+The recommended naming convention for models is:
+* Title Case for main unit model. Example: "Archimedes.obj" (optional)
+* For shield meshes append a hyphen ("-") and the word "shield" to the unit name. UnitConverter will recognize this model as a shield and place the correct information in the units.csv file. Example: "Archimedes-shield.obj"
+* For import of mount (/positional/helper) objects, append "-mount" to the unit name. Example: "Archimedes-mounts.obj".
+
+
+==Textures==
+Textures Screen:
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10616&g2_serialNumber=2&ext=.jpg
+
+==HUD Image==
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10614&g2_serialNumber=2&ext=.jpg
+
+
+==Unit Editor==
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10618&g2_serialNumber=2&ext=.jpg
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10620&g2_serialNumber=2&ext=.jpg
+
+
+==Configuration==
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10612&g2_serialNumber=2&ext=.jpg
+
+
+==About==
+
+http://vegastrike.sourceforge.net/gallery2/main.php?g2_view=core.DownloadItem&g2_itemId=10610&g2_serialNumber=2&ext=.jpg
+
+
+=Code Reference=
